@@ -1,0 +1,469 @@
+---
+title: "Bulk RNA-seq Analysis Report"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    format-links: false
+    embed-resources: true
+    code-fold: true
+    theme: zephyr
+    css: assets/style.css
+    include-after-body: assets/report-ui.html
+    fig-align: center
+    fig-responsive: true
+  pdf:
+    toc: true
+    toc-depth: 3
+    number-sections: false
+    fig-align: center
+    pdf-engine: xelatex
+    geometry:
+      - margin=0.65in
+    colorlinks: true
+    documentclass: article
+    papersize: letter
+knitr:
+  opts_chunk:
+    dev: "png"
+    dpi: 110
+    fig.retina: 2
+    out.width: "100%"
+params:
+  config_path: "config/config.yaml"
+  project_root: "."
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center"
+)
+
+# Allow reused chunk labels inside per-contrast knit_child loops;
+# knitr auto-suffixes so figure files become <label>-1.png, <label>-2.png, ...
+options(knitr.duplicate.label = "allow")
+
+suppressPackageStartupMessages({
+  library(yaml)
+  library(readr)
+  library(dplyr)
+  library(tidyr)
+  library(tibble)
+  library(ggplot2)
+  library(DT)
+  library(plotly)
+})
+
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
+project_root <- normalizePath(params$project_root, mustWork = TRUE)
+config_path  <- normalizePath(params$config_path,  mustWork = TRUE)
+
+# All downstream paths are resolved relative to the project root.
+rp <- function(...) file.path(project_root, ...)
+
+cfg      <- yaml::read_yaml(config_path)
+project  <- cfg$project       %||% list()
+exp_meta <- project$experiment %||% list()
+
+samples_tsv   <- rp(cfg$input$samples_tsv)
+contrasts_tsv <- rp(cfg$input$contrasts_tsv)
+
+samples   <- readr::read_tsv(samples_tsv,   show_col_types = FALSE)
+contrasts <- readr::read_tsv(contrasts_tsv, show_col_types = FALSE)
+
+# Helper to look up contrast metadata by id.
+contrast_row <- function(cid) {
+  out <- contrasts[contrasts$contrast_id == cid, , drop = FALSE]
+  if (nrow(out) == 0) return(NULL)
+  as.list(out[1, ])
+}
+
+# Shared helper: emit "no results available" card.
+no_results <- function(msg = "No results available for this section.") {
+  htmltools::div(
+    class  = "callout callout-note",
+    style  = "padding:0.75em 1em;border-left:4px solid #8aa;background:#f5f7f9;margin:0.5em 0;",
+    htmltools::tags$em(msg)
+  )
+}
+
+# Safe CSV/TSV loader: returns NULL on missing/unreadable/empty.
+safe_read <- function(path, sep = ",") {
+  if (is.null(path) || !file.exists(path)) return(NULL)
+  df <- tryCatch(
+    if (sep == "\t") {
+      readr::read_tsv(path, show_col_types = FALSE)
+    } else {
+      readr::read_csv(path, show_col_types = FALSE)
+    },
+    error = function(e) NULL
+  )
+  if (is.null(df) || nrow(df) == 0) return(df)  # keep empty DF for header-only files
+  df
+}
+
+fmt_num <- function(x, digits = 3) {
+  if (is.null(x) || length(x) == 0) return(NA_character_)
+  formatC(x, format = "g", digits = digits)
+}
+
+is_html_report <- function() isTRUE(knitr::is_html_output())
+
+report_table <- function(data, rownames = FALSE, filter = "top",
+                         extensions = NULL, options = list(),
+                         caption = NULL, signif_cols = character(),
+                         digits = 3) {
+  data <- as.data.frame(data)
+  if (is_html_report()) {
+    dt_args <- list(
+      data = data,
+      rownames = rownames,
+      filter = filter,
+      caption = caption,
+      options = options
+    )
+    if (!is.null(extensions)) dt_args$extensions <- extensions
+    dt <- do.call(DT::datatable, dt_args)
+    if (length(signif_cols) > 0) {
+      dt <- DT::formatSignif(dt, columns = intersect(signif_cols, names(data)),
+                             digits = digits)
+    }
+    return(dt)
+  }
+
+  static <- data
+  for (col in intersect(signif_cols, names(static))) {
+    if (is.numeric(static[[col]])) static[[col]] <- signif(static[[col]], digits)
+  }
+  max_rows <- options$pageLength %||% min(25, nrow(static))
+  if (is.finite(max_rows) && nrow(static) > max_rows) {
+    static <- utils::head(static, max_rows)
+    caption <- paste(caption %||% "", sprintf("(showing first %d rows)", max_rows))
+  }
+  knitr::kable(static, caption = caption, booktabs = TRUE, longtable = TRUE)
+}
+```
+
+::: {.panel-tabset .hidden}
+:::
+
+# Cover
+
+```{r cover, results='asis'}
+project_name <- project$name   %||% "Bulk RNA-seq Project"
+analyst      <- project$analyst %||% "n/a"
+report_date  <- format(Sys.Date(), "%Y-%m-%d")
+
+cell_line <- exp_meta$cell_line %||% ""
+compound  <- exp_meta$compound  %||% ""
+dose      <- exp_meta$dose      %||% ""
+duration  <- exp_meta$duration  %||% ""
+notes     <- exp_meta$notes     %||% ""
+
+empty_dash <- function(x) if (is.null(x) || is.na(x) || !nzchar(x)) "—" else x
+
+cat("**Project:** ", project_name, "  \n", sep = "")
+cat("**Prepared by:** ", analyst,  "  \n", sep = "")
+cat("**Report date:** ", report_date, "\n\n", sep = "")
+
+cat("## Experiment\n\n")
+cat("| Field | Value |\n|---|---|\n")
+cat(sprintf("| Cell line | %s |\n", empty_dash(cell_line)))
+cat(sprintf("| Compound  | %s |\n", empty_dash(compound)))
+cat(sprintf("| Dose      | %s |\n", empty_dash(dose)))
+cat(sprintf("| Duration  | %s |\n", empty_dash(duration)))
+cat(sprintf("| Notes     | %s |\n", empty_dash(notes)))
+cat("\n")
+
+cat("## Design\n\n")
+cat(sprintf("- Samples: **%d**\n", nrow(samples)))
+if ("condition" %in% names(samples)) {
+  cond_tbl <- sort(table(samples$condition))
+  cat("- Condition counts:\n")
+  for (nm in names(cond_tbl)) {
+    cat(sprintf("  - %s: %d\n", nm, cond_tbl[[nm]]))
+  }
+}
+cat(sprintf("- Contrasts defined: **%d**\n", nrow(contrasts)))
+cat("\n")
+```
+
+### Samples
+
+```{r cover-samples}
+knitr::kable(samples, row.names = FALSE, booktabs = TRUE, longtable = TRUE)
+```
+
+### Contrasts
+
+```{r cover-contrasts}
+knitr::kable(contrasts, row.names = FALSE, booktabs = TRUE, longtable = TRUE)
+```
+
+# Analysis workflow
+
+```{mermaid}
+flowchart TD
+    A[nf-core/rnaseq · salmon counts] --> B[QC summary · MultiQC]
+    A --> C[Exploratory · VST / PCA / sample correlation]
+    C --> D[Differential expression · DESeq2 + apeglm]
+    D --> E[Functional enrichment]
+    E --> E1[GSEA · MSigDB]
+    E --> E2[ORA · GO / KEGG / Reactome / Hallmark]
+    D --> F[TF activity · decoupler ULM + CollecTRI]
+    D --> G[Pathway activity · PROGENy]
+    D --> H[Drug repositioning · L2S2 / LINCS]
+```
+
+## Report structure and interpretation
+
+::: {.lang-en}
+Each section maps to one analytical stage with its inputs, method, and outputs. Metrics are reported **without pre-applied pass/fail thresholds**.
+
+| Stage | Analytical objective | Method | Primary deliverable |
+|---|---|---|---|
+| **Quality control** | Assess library preparation and alignment integrity. | MultiQC aggregation of FastQC, STAR/Salmon, and RSeQC metrics. | Per-sample table of duplication, alignment rate, rRNA contamination, and strandedness. |
+| **Exploratory analysis** | Evaluate sample grouping structure and detect outliers prior to inference. | VST-transformed counts; PCA on top 500 most-variable genes; sample-to-sample correlation. | PCA projection, correlation heatmap, dendrogram. |
+| **Differential expression** | Quantify condition-associated changes in gene expression. | DESeq2 Wald test with apeglm log-fold-change shrinkage. | Results table with shrunken LFC, Wald statistic, and adjusted *p*-values; volcano, MA, and top-DEG heatmap. |
+| **Gene set enrichment (GSEA)** | Identify gene sets coordinately perturbed across the full ranked list. | Pre-ranked GSEA on Wald statistic across selected MSigDB collections. | Normalized enrichment score and adjusted *p*-value per gene set. |
+| **Over-representation (ORA)** | Identify pathways enriched among the DEG shortlist. | Hypergeometric test against GO, KEGG, Reactome, and Hallmark databases. | Raw and adjusted *p*-values per pathway and database. |
+| **Transcription-factor activity** | Infer upstream regulators consistent with the observed expression changes. | decoupleR univariate linear model (ULM) applied to the CollecTRI regulon network. | Per-sample TF activity scores with significance. |
+| **Pathway activity** | Estimate canonical signalling-pathway activity per sample. | PROGENy with top responsive targets; z-scored activity with treated−control delta. | Per-sample pathway activity matrix and contrast-level summary. |
+| **Drug repositioning** | Identify perturbagens producing transcriptomic signatures concordant or discordant with the contrast. | L2S2 / LINCS L1000 signature query using top up- and down-regulated genes. | Ranked perturbagen table with connectivity scores. |
+| **Audit trail** | Ensure reproducibility and provenance of the analysis. | Snapshot of configuration, input checksums, and computational environment. | Resolved config, input MD5 sums, and full session information. |
+:::
+
+::: {.lang-ko}
+각 섹션은 분석 단계 하나에 대응하며 입력·방법·산출물을 함께 제공합니다. 정량 지표는 **pass/fail cutoff를 사전에 적용하지 않고** 그대로 표시합니다.
+
+| 단계 | 분석 목적 | 방법 | 주 산출물 |
+|---|---|---|---|
+| **Quality control** | 라이브러리 준비와 정렬 품질 평가. | FastQC, STAR/Salmon, RSeQC metric을 MultiQC로 집계. | 샘플별 duplication, alignment rate, rRNA contamination, strandedness 표. |
+| **탐색 분석** | 추론 전에 샘플 그룹 구조 확인 및 이상치 탐지. | VST 변환 카운트 · top 500 variable gene PCA · 샘플-샘플 상관. | PCA 투영, 상관 heatmap, dendrogram. |
+| **차등발현** | 조건별 유전자 발현 변화 정량화. | DESeq2 Wald test + apeglm log-fold-change shrinkage. | shrunken LFC, Wald statistic, 조정 *p*-value 결과 표 · volcano · MA · top-DEG heatmap. |
+| **Gene set enrichment (GSEA)** | 전체 ranked list에서 일관되게 변동하는 gene set 탐지. | 선택된 MSigDB collection에 대해 Wald statistic 기반 pre-ranked GSEA. | Gene set별 NES 및 조정 *p*-value. |
+| **Over-representation (ORA)** | DEG shortlist에서 과대표현된 pathway 확인. | GO, KEGG, Reactome, Hallmark DB에 대한 hypergeometric test. | Pathway·DB별 raw / adjusted *p*-value. |
+| **전사인자 활성도** | 관찰된 발현 패턴을 설명하는 상류 조절자 추론. | CollecTRI regulon 네트워크에 대한 decoupleR ULM. | 샘플별 TF 활성 score와 유의성. |
+| **Pathway 활성도** | 샘플별 canonical signalling pathway 활성 추정. | PROGENy (top responsive targets) · z-scored 활성도 · treated−control delta. | 샘플별 pathway 활성도 행렬, contrast 수준 요약. |
+| **Drug repositioning** | 해당 contrast와 일치하거나 반대되는 transcriptomic signature의 perturbagen 탐색. | Top up / down 유전자로 L2S2 / LINCS L1000 signature 질의. | Connectivity score 기반 perturbagen ranking 표. |
+| **Audit trail** | 분석 재현성과 provenance 보장. | Config snapshot, 입력 checksum, 계산 환경 스냅샷. | 최종 config, 입력 MD5, 세션 정보. |
+:::
+
+{{< include sections/_qc.qmd >}}
+
+{{< include sections/_exploratory.qmd >}}
+
+{{< include sections/_de.qmd >}}
+
+{{< include sections/_enrichment.qmd >}}
+
+{{< include sections/_drug_repositioning.qmd >}}
+
+# Audit trail
+
+## Input provenance
+
+::: {.lang-en}
+- Gene counts: nf-core/rnaseq `salmon.merged.gene_counts_length_scaled.tsv`
+  (tximport + `countsFromAbundance="lengthScaledTPM"` upstream; integer-rounded before DESeq2).
+- `log2FoldChange` values reported in DE results are **apeglm-shrunken**.
+- `stat` values reported in DE results are **unshrunk Wald test statistics** from `DESeq2::results()`
+  (apeglm does not return a statistic; the Wald stat drives GSEA ranking).
+- Organism: **Homo sapiens** (fixed by workflow design; not configurable).
+:::
+
+::: {.lang-ko}
+- 유전자 카운트: nf-core/rnaseq `salmon.merged.gene_counts_length_scaled.tsv`
+  (tximport + `countsFromAbundance="lengthScaledTPM"` 경로; DESeq2 입력 직전에 정수 반올림).
+- DE 결과의 `log2FoldChange`는 **apeglm으로 shrink된 값**.
+- DE 결과의 `stat`은 `DESeq2::results()`가 반환하는 **shrink되지 않은 Wald test 통계량** (apeglm은 statistic을 반환하지 않으므로 GSEA 랭킹에는 Wald stat 사용).
+- 대상 종: **Homo sapiens** (워크플로우 설계상 고정, 설정 불가).
+:::
+
+## Cutoffs in use
+
+```{r audit-cutoffs, results='asis'}
+de_cfg <- cfg$de %||% list()
+prim   <- de_cfg$primary   %||% list(padj = NA, abs_lfc = NA)
+sec    <- de_cfg$secondary %||% list(padj = NA, abs_lfc = NA)
+ora_cfg <- cfg$enrichment$ora  %||% list()
+gsea_cfg <- cfg$enrichment$gsea %||% list()
+tf_cfg   <- cfg$tf_activity     %||% list()
+pw_cfg   <- cfg$pathway_activity %||% list()
+dr_cfg   <- cfg$drug_repositioning %||% list()
+
+cat("| Setting | Value |\n|---|---|\n")
+cat(sprintf("| DE prefilter (min count / mode) | %s / %s |\n",
+            de_cfg$prefilter_min_count %||% "—",
+            de_cfg$prefilter_min_samples_mode %||% "—"))
+cat(sprintf("| DE LFC shrink | %s |\n", de_cfg$lfc_shrink %||% "—"))
+cat(sprintf("| Primary DEG | padj < %s & |LFC| >= %s |\n",
+            prim$padj   %||% "—", prim$abs_lfc   %||% "—"))
+cat(sprintf("| Secondary DEG | padj < %s & |LFC| >= %s |\n",
+            sec$padj    %||% "—", sec$abs_lfc    %||% "—"))
+cat(sprintf("| ORA min / max input genes | %s / %s |\n",
+            ora_cfg$min_input_genes %||% "—", ora_cfg$max_input_genes %||% "—"))
+cat(sprintf("| ORA databases | %s |\n",
+            paste(ora_cfg$databases %||% character(), collapse = ", ")))
+cat(sprintf("| GSEA ranking / min / max / seed | %s / %s / %s / %s |\n",
+            gsea_cfg$ranking %||% "—",
+            gsea_cfg$min_size %||% "—",
+            gsea_cfg$max_size %||% "—",
+            gsea_cfg$seed %||% "—"))
+cat(sprintf("| GSEA collections | %s |\n",
+            paste(gsea_cfg$collections %||% character(), collapse = ", ")))
+cat(sprintf("| TF activity (method / min_size / top_n) | %s / %s / %s |\n",
+            tf_cfg$method %||% "—",
+            tf_cfg$min_size %||% "—",
+            tf_cfg$top_n %||% "—"))
+cat(sprintf("| PROGENy top targets | %s |\n", pw_cfg$top_targets %||% "—"))
+cat(sprintf("| Drug repositioning (service / top_up / top_down) | %s / %s / %s |\n",
+            dr_cfg$service %||% "—",
+            dr_cfg$top_up  %||% "—",
+            dr_cfg$top_down %||% "—"))
+cat("\n")
+```
+
+## Reproducibility summary
+
+```{r audit-reproducibility}
+file_meta <- function(label, path) {
+  resolved <- if (is.null(path) || is.na(path) || !nzchar(path)) {
+    NA_character_
+  } else if (grepl("^/", path)) {
+    path
+  } else {
+    file.path(project_root, path)
+  }
+
+  exists <- !is.na(resolved) && file.exists(resolved)
+  info <- if (exists) file.info(resolved) else NULL
+  md5 <- if (exists) unname(tools::md5sum(resolved)) else NA_character_
+
+  data.frame(
+    item = label,
+    path = if (is.na(resolved)) NA_character_ else normalizePath(resolved, winslash = "/", mustWork = FALSE),
+    exists = exists,
+    size_bytes = if (exists) info$size else NA_real_,
+    modified = if (exists) format(info$mtime, "%Y-%m-%d %H:%M:%S %Z") else NA_character_,
+    md5 = md5,
+    stringsAsFactors = FALSE
+  )
+}
+
+run_meta <- data.frame(
+  item = c("Report render time", "Project root", "Config used by report"),
+  value = c(
+    format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
+    project_root,
+    config_path
+  ),
+  stringsAsFactors = FALSE
+)
+
+report_table(
+  run_meta,
+  rownames = FALSE,
+  options = list(pageLength = 3, dom = "t", scrollX = TRUE)
+)
+
+input_meta <- dplyr::bind_rows(
+  file_meta("Config YAML", config_path),
+  file_meta("Counts TSV", cfg$input$counts_tsv %||% NA_character_),
+  file_meta("Samples TSV", cfg$input$samples_tsv %||% NA_character_),
+  file_meta("Contrasts TSV", cfg$input$contrasts_tsv %||% NA_character_),
+  file_meta("MultiQC data directory", cfg$input$multiqc_data_dir %||% NA_character_)
+)
+
+report_table(
+  input_meta,
+  rownames = FALSE,
+  filter = "top",
+  options = list(
+    pageLength = 10,
+    lengthMenu = c(10, 25, 50),
+    scrollX = TRUE,
+    autoWidth = FALSE,
+    dom = "lfrtip",
+    columnDefs = list(
+      list(targets = which(names(input_meta) == "path") - 1,
+           className = "pathway-name-column"),
+      list(targets = which(names(input_meta) == "md5") - 1,
+           className = "pathway-name-column")
+    )
+  )
+)
+```
+
+## Tools and references
+
+**Workflow infrastructure**
+
+- Snakemake — Mölder F. et al. (2021). *F1000Research* 10:33. [doi:10.12688/f1000research.29032.2](https://doi.org/10.12688/f1000research.29032.2)
+- nf-core/rnaseq — Ewels P.A. et al. (2020). *Nat Biotechnol.* 38, 276–278. [doi:10.1038/s41587-020-0439-x](https://doi.org/10.1038/s41587-020-0439-x)
+- Quarto — <https://quarto.org>
+
+**Quantification, counts, and QC**
+
+- Salmon — Patro R. et al. (2017). *Nat Methods* 14, 417–419. [doi:10.1038/nmeth.4197](https://doi.org/10.1038/nmeth.4197)
+- tximport — Soneson C., Love M.I., Robinson M.D. (2015). *F1000Research* 4:1521. [doi:10.12688/f1000research.7563.2](https://doi.org/10.12688/f1000research.7563.2)
+- MultiQC — Ewels P. et al. (2016). *Bioinformatics* 32(19), 3047–3048. [doi:10.1093/bioinformatics/btw354](https://doi.org/10.1093/bioinformatics/btw354)
+
+**Differential expression**
+
+- DESeq2 — Love M.I., Huber W., Anders S. (2014). *Genome Biol.* 15, 550. [doi:10.1186/s13059-014-0550-8](https://doi.org/10.1186/s13059-014-0550-8)
+- apeglm — Zhu A., Ibrahim J.G., Love M.I. (2019). *Bioinformatics* 35(12), 2084–2092. [doi:10.1093/bioinformatics/bty895](https://doi.org/10.1093/bioinformatics/bty895)
+
+**Gene-set analysis**
+
+- GSEA (method) — Subramanian A. et al. (2005). *PNAS* 102(43), 15545–15550. [doi:10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102)
+- fgsea — Korotkevich G. et al. (2021). *bioRxiv.* [doi:10.1101/060012](https://doi.org/10.1101/060012)
+- clusterProfiler 4.0 — Wu T. et al. (2021). *The Innovation* 2(3), 100141. [doi:10.1016/j.xinn.2021.100141](https://doi.org/10.1016/j.xinn.2021.100141)
+- MSigDB / Hallmark — Liberzon A. et al. (2015). *Cell Systems* 1(6), 417–425. [doi:10.1016/j.cels.2015.12.004](https://doi.org/10.1016/j.cels.2015.12.004)
+
+**Regulatory and pathway activity inference**
+
+- decoupleR / decoupler-py — Badia-i-Mompel P. et al. (2022). *Bioinformatics Advances* 2(1), vbac016. [doi:10.1093/bioadv/vbac016](https://doi.org/10.1093/bioadv/vbac016)
+- CollecTRI — Müller-Dott S. et al. (2023). *Nucleic Acids Research* gkad841. [doi:10.1093/nar/gkad841](https://doi.org/10.1093/nar/gkad841)
+- PROGENy — Schubert M. et al. (2018). *Nat Commun* 9, 20. [doi:10.1038/s41467-017-02391-6](https://doi.org/10.1038/s41467-017-02391-6)
+
+**Drug repositioning / connectivity**
+
+- L1000 Connectivity Map — Subramanian A. et al. (2017). *Cell* 171(6), 1437–1452. [doi:10.1016/j.cell.2017.10.049](https://doi.org/10.1016/j.cell.2017.10.049)
+- L2S2 — L1000 signature search (Ma'ayan Lab). <https://l2s2.maayanlab.cloud>
+
+## Session info
+
+```{r audit-sessioninfo}
+# Keep only reproducibility-relevant fields: R version, platform, OS,
+# attached packages + versions, and loaded-via-namespace packages.
+# Drop: BLAS/LAPACK install paths, locale, time zone, RNG kind.
+si <- utils::capture.output(sessionInfo())
+
+drop_pat <- paste0(
+  "^(Matrix products:",
+  "|BLAS(/LAPACK)?:|LAPACK:",
+  "|locale:",
+  "|time zone:",
+  "|tzcode source:",
+  "|Random number generation:",
+  "|\\s+\\[\\s*\\d+\\]\\s+LC_",
+  "|\\s+(RNG|Normal|Sample):)"
+)
+si <- si[!grepl(drop_pat, si)]
+
+# Collapse runs of consecutive blank lines left behind by removals.
+prev_blank <- FALSE
+keep <- logical(length(si))
+for (i in seq_along(si)) {
+  is_blank <- !nzchar(trimws(si[i]))
+  keep[i] <- !(is_blank && prev_blank)
+  prev_blank <- is_blank
+}
+cat(si[keep], sep = "\n")
+```

@@ -1,0 +1,76 @@
+project:
+  name: "test-fixture"
+  analyst: "ci"
+  experiment:
+    cell_line: "A549"
+    compound: "TestCompound"
+    dose: "10 uM"
+    duration: "24 h"
+    notes: "test fixture"
+
+input:
+  counts_tsv: "tests/test_data/counts.tsv"
+  multiqc_data_dir: "tests/test_data/multiqc_data"
+  samples_tsv: "tests/test_data/samples.tsv"
+  contrasts_tsv: "tests/test_data/contrasts.tsv"
+
+de:
+  tool: "deseq2"
+  prefilter_min_count: 10
+  prefilter_min_samples_mode: "smallest_group"
+  lfc_shrink: "apeglm"
+  primary:
+    padj: 0.05
+    abs_lfc: 1.0
+  secondary:
+    padj: 0.10
+    abs_lfc: 0.5
+
+enrichment:
+  gsea:
+    ranking: "stat"
+    min_size: 15
+    max_size: 500
+    seed: 42
+    collections:
+      - "H"
+  ora:
+    min_input_genes: 100
+    max_input_genes: 500
+    databases:
+      - "GO_BP"
+      - "KEGG"
+      - "Reactome"
+      - "Hallmark"
+
+tf_activity:
+  tool: "decoupler"
+  network: "collectri"
+  method: "ulm"
+  split_complexes: false
+  min_size: 5
+  padj_cutoff: 0.05
+  top_n: 50
+
+pathway_activity:
+  tool: "decoupler"
+  network: "progeny"
+  top_targets: 500
+
+drug_repositioning:
+  enabled: true
+  service: "l2s2"
+  top_up: 250
+  top_down: 250
+
+report:
+  formats: ["html"]
+  theme: "default"
+  logo: "report/assets/logo.png"
+  branding:
+    title: "Test Report"
+    footer: "test"
+
+resources:
+  msigdb_version: "2023.2.Hs"
+  threads_default: 2

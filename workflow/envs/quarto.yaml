@@ -1,0 +1,21 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - quarto
+  - texlive-core
+  - r-base=4.3
+  - r-rmarkdown
+  - r-knitr
+  - r-quarto
+  - r-tidyverse
+  - r-readr
+  - r-dplyr
+  - r-tidyr
+  - r-ggplot2
+  - r-scales
+  - r-dt
+  - r-plotly
+  - r-htmltools
+  - r-yaml
+  - bioconductor-summarizedexperiment

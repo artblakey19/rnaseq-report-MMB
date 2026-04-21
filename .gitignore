@@ -1,0 +1,94 @@
+# ============================================================
+# Pipeline runtime state & outputs
+# ============================================================
+.snakemake/
+logs/
+results/
+figure/
+
+# Large input counts matrix committed by mistake
+Cebu.salmon.merged.gene_counts_length_scaled.tsv
+
+# Ad-hoc run artifacts
+run.log
+dry_run.txt
+
+# ============================================================
+# Python / venv
+# ============================================================
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ============================================================
+# R
+# ============================================================
+.Rhistory
+.Rapp.history
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rproj
+renv/library/
+renv/staging/
+renv/local/
+renv/lock/
+renv/python/
+
+# OmnipathR default logger (created when any R decoupleR / OmnipathR
+# code runs in this directory — not used by the active Python pipeline)
+omnipathr-log/
+
+# ============================================================
+# Quarto / report build sidecars
+# ============================================================
+report/template.html
+report/template.pdf
+report/template.tex
+report/template_files/
+report/_freeze/
+report/.quarto/
+/_site/
+/_book/
+
+# ============================================================
+# Conda / Mamba envs built by Snakemake
+# ============================================================
+.conda/
+envs/.installed/
+
+# ============================================================
+# Secrets / local config
+# ============================================================
+.env
+.env.*
+!.env.example
+config/local.yaml
+config/*.local.yaml
+*.key
+*.pem
+
+# ============================================================
+# Editor / OS
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# Claude / agent session state
+# ============================================================
+.claude/
+.codex

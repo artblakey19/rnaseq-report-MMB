@@ -1,0 +1,503 @@
+# Functional enrichment
+
+::: {.lang-en}
+Per-contrast GSEA (primary), ORA (supplementary), TF activity (CollecTRI / ULM), and PROGENy pathway activity. Empty outputs are marked inline.
+:::
+
+::: {.lang-ko}
+Contrast별 GSEA(1차), ORA(보조), TF 활성도(CollecTRI / ULM), PROGENy pathway 활성도. 빈 출력은 해당 위치에 안내로 표시됩니다.
+:::
+
+````{r enr-child-template, include=FALSE}
+enr_child_template <- r"---(
+## `r cid`
+
+### GSEA
+
+```{r enr-gsea, results='asis', fig.width=9, fig.height=8}
+gsea_names <- c(Hallmark     = "gsea_hallmark.csv",
+                Reactome     = "gsea_reactome.csv",
+                WikiPathways = "gsea_wikipathways.csv",
+                PID          = "gsea_pid.csv",
+                BioCarta     = "gsea_biocarta.csv",
+                CGP          = "gsea_cgp.csv",
+                Oncogenic    = "gsea_oncogenic.csv")
+gsea_paths <- setNames(
+  file.path(project_root, "results", "enrichment", cid, gsea_names),
+  names(gsea_names)
+)
+gsea_list <- lapply(gsea_paths, function(p) safe_read(p))
+gsea_all <- dplyr::bind_rows(
+  Filter(function(d) !is.null(d) && nrow(d) > 0, gsea_list),
+  .id = "group"
+)
+
+# Shorten long pathway names for plot labels only. Full names remain available
+# in the DT tables, where the name columns wrap and can be resized.
+.trunc_label <- function(x, n = 50) {
+  x <- as.character(x)
+  ifelse(nchar(x) > n, paste0(substr(x, 1, n - 1), "..."), x)
+}
+
+.top_by_direction <- function(df, direction_col = "direction", p_col = "padj", n = 10) {
+  if (!all(c(direction_col, p_col) %in% names(df))) return(df[0, , drop = FALSE])
+  df |>
+    dplyr::filter(.data[[direction_col]] %in% c("up", "down")) |>
+    dplyr::group_by(.data[[direction_col]]) |>
+    dplyr::arrange(.data[[p_col]], .by_group = TRUE) |>
+    dplyr::slice_head(n = n) |>
+    dplyr::ungroup()
+}
+
+if (nrow(gsea_all) == 0) {
+  cat(as.character(no_results("GSEA returned no enriched sets for this contrast.")))
+} else {
+  nonempty_grps <- Filter(
+    function(g) {
+      d <- gsea_list[[g]]
+      !is.null(d) && nrow(d) > 0
+    },
+    names(gsea_list)
+  )
+  if (is_html_report() && length(nonempty_grps) > 0) {
+    cat("\n\n::: {.panel-tabset}\n\n")
+  }
+  for (grp in nonempty_grps) {
+    df <- gsea_list[[grp]]
+    cat(sprintf("\n\n#### %s\n\n", grp))
+    ranked <- df |>
+      dplyr::mutate(direction = dplyr::case_when(
+        NES > 0 ~ "up",
+        NES < 0 ~ "down",
+        TRUE ~ NA_character_
+      ))
+    top <- .top_by_direction(ranked, "direction", "padj", n = 10) |>
+      dplyr::mutate(label = .trunc_label(pathway))
+    top$label <- factor(top$label, levels = rev(unique(top$label)))
+    p <- ggplot2::ggplot(top, ggplot2::aes(x = NES, y = label, fill = direction)) +
+      ggplot2::geom_col() +
+      ggplot2::scale_fill_manual(values = c(up = "#c0392b", down = "#2c7bb6")) +
+      ggplot2::geom_vline(xintercept = 0, colour = "grey40") +
+      ggplot2::labs(x = "NES", y = NULL,
+                    title = sprintf("Top 10 up / Top 10 down %s gene sets (by padj)", grp)) +
+      ggplot2::theme_minimal(base_size = 11) +
+      ggplot2::theme(
+        axis.text.y = ggplot2::element_text(size = 9),
+        plot.margin = ggplot2::margin(6, 10, 6, 6)
+      )
+    print(p)
+    cat("\n\n")
+
+    show_df <- ranked |>
+      .top_by_direction("direction", "padj", n = 10) |>
+      dplyr::select(dplyr::any_of(c("collection", "pathway", "NES",
+                                    "pval", "padj", "size", "leadingEdge")))
+    dt <- report_table(
+      show_df,
+      rownames = FALSE,
+      filter   = "top",
+      options  = list(
+        pageLength = 20,
+        lengthMenu = c(10, 20, 50, 100),
+        scrollX = TRUE,
+        autoWidth = FALSE,
+        dom = "lfrtip",
+        columnDefs = list(
+          list(targets = which(names(show_df) == "pathway") - 1,
+               className = "pathway-name-column")
+        )
+      ),
+      signif_cols = intersect(c("NES", "pval", "padj"), names(show_df)),
+      digits  = 3
+    )
+    cat(knitr::knit_print(dt))
+    cat("\n\n")
+  }
+  if (is_html_report() && length(nonempty_grps) > 0) {
+    cat("\n\n:::\n\n")
+  }
+}
+```
+
+### ORA (supplementary)
+
+```{r enr-ora, results='asis', fig.width=9, fig.height=11}
+de_path <- file.path(project_root, "results", "de", cid, "deseq2_results.csv")
+de_for_ora <- safe_read(de_path)
+ora_de_cfg <- cfg$de %||% list()
+ora_cfg <- cfg$enrichment$ora %||% list()
+ora_primary <- ora_de_cfg$primary %||% list(padj = 0.05, abs_lfc = 1)
+ora_secondary <- ora_de_cfg$secondary %||% list(padj = 0.10, abs_lfc = 0.5)
+ora_min_genes <- ora_cfg$min_input_genes %||% 100
+ora_max_genes <- ora_cfg$max_input_genes %||% 500
+
+.ora_candidates <- function(de_tbl, tier_name, cutoff) {
+  if (is.null(de_tbl) || nrow(de_tbl) == 0) return(de_tbl[0, , drop = FALSE])
+  de_tbl |>
+    dplyr::filter(
+      !is.na(padj),
+      !is.na(log2FoldChange),
+      padj < cutoff$padj,
+      abs(log2FoldChange) >= cutoff$abs_lfc,
+      !is.na(gene_name),
+      nzchar(as.character(gene_name))
+    ) |>
+    dplyr::mutate(tier = tier_name)
+}
+
+ora_input_genes <- NULL
+ora_input_tier <- NA_character_
+if (!is.null(de_for_ora) && nrow(de_for_ora) > 0) {
+  prim_ora <- .ora_candidates(de_for_ora, "primary", ora_primary)
+  sec_ora  <- .ora_candidates(de_for_ora, "secondary", ora_secondary)
+  if (nrow(prim_ora) >= ora_min_genes) {
+    ora_input_genes <- prim_ora
+    ora_input_tier <- "primary"
+  } else if (nrow(sec_ora) >= ora_min_genes) {
+    ora_input_genes <- sec_ora
+    ora_input_tier <- "secondary"
+  } else {
+    ora_input_genes <- prim_ora[0, , drop = FALSE]
+  }
+  if (!is.null(ora_input_genes) && nrow(ora_input_genes) > ora_max_genes) {
+    ora_input_genes <- ora_input_genes |>
+      dplyr::arrange(dplyr::desc(abs(log2FoldChange))) |>
+      dplyr::slice_head(n = ora_max_genes)
+  }
+  if (!is.null(ora_input_genes) && nrow(ora_input_genes) > 0) {
+    ora_input_genes <- ora_input_genes |>
+      dplyr::mutate(
+        direction = dplyr::case_when(
+          log2FoldChange > 0 ~ "up",
+          log2FoldChange < 0 ~ "down",
+          TRUE ~ NA_character_
+        )
+      ) |>
+      dplyr::filter(direction %in% c("up", "down")) |>
+      dplyr::group_by(direction) |>
+      dplyr::arrange(dplyr::desc(abs(log2FoldChange)), .by_group = TRUE) |>
+      dplyr::mutate(input_rank = dplyr::row_number()) |>
+      dplyr::ungroup() |>
+      dplyr::select(dplyr::any_of(c(
+        "direction", "input_rank", "tier", "gene_id", "gene_name",
+        "log2FoldChange", "padj"
+      )))
+  }
+}
+
+if (is_html_report()) {
+  cat("\n\n<details>\n")
+  cat("<summary><strong>ORA input gene list</strong></summary>\n\n")
+} else {
+  cat("\n\n#### ORA input gene list\n\n")
+}
+if (is.null(ora_input_genes) || nrow(ora_input_genes) == 0) {
+  cat(as.character(no_results(sprintf(
+    "No ORA input gene list selected: primary and secondary tiers both yielded fewer than %d genes.",
+    ora_min_genes
+  ))))
+  cat("\n\n")
+} else {
+  gene_counts <- table(factor(ora_input_genes$direction, levels = c("up", "down")))
+  caption <- sprintf(
+    "ORA input genes: %s tier, %d total (%d up, %d down)",
+    ora_input_tier,
+    nrow(ora_input_genes),
+    as.integer(gene_counts[["up"]] %||% 0),
+    as.integer(gene_counts[["down"]] %||% 0)
+  )
+  dt <- report_table(
+    ora_input_genes,
+    rownames = FALSE,
+    filter = "top",
+    caption = caption,
+    options = list(
+      pageLength = 25,
+      lengthMenu = c(25, 50, 100, 250, 500),
+      scrollX = TRUE,
+      autoWidth = FALSE,
+      dom = "lfrtip"
+    ),
+    signif_cols = intersect(c("log2FoldChange", "padj"), names(ora_input_genes)),
+    digits = 3
+  )
+  cat(knitr::knit_print(dt))
+  cat("\n\n")
+}
+if (is_html_report()) cat("\n</details>\n\n")
+
+cat("\n\n#### ORA enrichment results\n\n")
+ora_path <- file.path(project_root, "results", "enrichment", cid, "ora_combined.csv")
+ora <- safe_read(ora_path)
+if (is.null(ora) || nrow(ora) == 0) {
+  cat(as.character(no_results("ORA returned no results (insufficient DEG or empty output).")))
+} else {
+  ora_dbs <- unique(as.character(ora$database))
+  ora_dbs <- ora_dbs[!is.na(ora_dbs) & nzchar(ora_dbs)]
+
+  if (is_html_report() && length(ora_dbs) > 0) {
+    cat("\n\n::: {.panel-tabset}\n\n")
+  }
+
+  for (db in ora_dbs) {
+    ora_db <- ora |> dplyr::filter(database == db)
+    if (nrow(ora_db) == 0) next
+    cat(sprintf("\n\n##### %s\n\n", db))
+
+    show_df <- ora_db |>
+      dplyr::filter(direction %in% c("up", "down")) |>
+      dplyr::group_by(direction) |>
+      dplyr::arrange(p.adjust, .by_group = TRUE) |>
+      dplyr::slice_head(n = 10) |>
+      dplyr::ungroup() |>
+      dplyr::select(dplyr::any_of(c("direction", "tier", "ID",
+                                    "Description", "GeneRatio", "BgRatio",
+                                    "pvalue", "p.adjust", "qvalue", "Count")))
+
+    bars <- show_df |>
+      dplyr::mutate(
+        neglog10p = -log10(pmax(p.adjust, 1e-300)),
+        Description = ifelse(is.na(Description) | !nzchar(as.character(Description)),
+                             as.character(ID), as.character(Description)),
+        Description = ifelse(nchar(Description) > 50,
+                             paste0(substr(Description, 1, 49), "..."),
+                             Description)
+      )
+    if (nrow(bars) > 0) {
+      p <- ggplot2::ggplot(
+          bars,
+          ggplot2::aes(x = neglog10p,
+                       y = reorder(Description, neglog10p),
+                       fill = direction)) +
+        ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.8)) +
+        ggplot2::scale_fill_manual(values = c(up = "#c0392b", down = "#2c7bb6")) +
+        ggplot2::labs(x = "-log10(p.adjust)", y = NULL,
+                      title = sprintf("Top 10 up / Top 10 down %s terms (by p.adjust)", db)) +
+        ggplot2::theme_minimal(base_size = 11) +
+        ggplot2::theme(
+          axis.text.y = ggplot2::element_text(size = 9),
+          plot.margin = ggplot2::margin(6, 15, 6, 15)
+        )
+      print(p)
+      cat("\n\n")
+    }
+
+    dt <- report_table(
+      show_df,
+      rownames = FALSE,
+      filter   = "top",
+      options  = list(
+        pageLength = 20,
+        lengthMenu = c(10, 20, 50, 100),
+        scrollX = TRUE,
+        autoWidth = FALSE,
+        dom = "lfrtip",
+        columnDefs = list(
+          list(targets = which(names(show_df) == "Description") - 1,
+               className = "pathway-name-column")
+        )
+      ),
+      signif_cols = intersect(c("pvalue", "p.adjust", "qvalue"), names(show_df)),
+      digits  = 3
+    )
+    cat(knitr::knit_print(dt))
+    cat("\n\n")
+  }
+
+  if (is_html_report() && length(ora_dbs) > 0) {
+    cat("\n\n:::\n\n")
+  }
+}
+```
+
+### TF activity (CollecTRI, ULM)
+
+```{r enr-tf-activity, results='asis', fig.width=8, fig.height=9}
+tf_path <- file.path(project_root, "results", "tf_activity", cid, "tf_scores.tsv")
+tf <- safe_read(tf_path, sep = "\t")
+if (is.null(tf) || nrow(tf) == 0) {
+  cat(as.character(no_results("TF activity output is empty (network fetch may have failed).")))
+} else {
+  tf_top <- tf |>
+    dplyr::mutate(abs_s = abs(score)) |>
+    dplyr::arrange(dplyr::desc(abs_s)) |>
+    head(30) |>
+    dplyr::mutate(source = factor(source, levels = rev(source)))
+  p <- ggplot2::ggplot(tf_top,
+          ggplot2::aes(x = score, y = source,
+                       fill = ifelse(score > 0, "up", "down"))) +
+    ggplot2::geom_col() +
+    ggplot2::scale_fill_manual(values = c(up = "#c0392b", down = "#2c7bb6"),
+                               name = "direction") +
+    ggplot2::geom_vline(xintercept = 0, colour = "grey40") +
+    ggplot2::labs(x = "ULM score", y = NULL,
+                  title = "Top 30 TFs by |score|") +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      axis.text.y = ggplot2::element_text(size = 9),
+      plot.margin = ggplot2::margin(6, 10, 6, 6)
+    )
+  print(p)
+  cat("\n\n")
+
+  show_df <- tf |>
+    dplyr::arrange(dplyr::desc(abs(score))) |>
+    head(200)
+  dt <- report_table(
+    show_df, rownames = FALSE, filter = "top",
+    options  = list(pageLength = 10, lengthMenu = c(10, 25, 50, 100), scrollX = TRUE, dom = "lfrtip"),
+    signif_cols = intersect(c("score", "p_value"), names(show_df)),
+    digits  = 3
+  )
+  cat(knitr::knit_print(dt))
+  cat("\n\n")
+}
+```
+
+### Pathway activity (PROGENy)
+
+::: {.lang-en}
+PROGENy scores are per-sample signature activity, not fold changes. Each pathway has its own baseline magnitude, so the heatmap is z-scored per pathway across samples, with the **treated vs control delta** reported separately.
+:::
+
+::: {.lang-ko}
+PROGENy score는 샘플별 signature 활성 추정치(fold change 아님). Pathway별 baseline 규모가 달라 heatmap은 pathway 단위로 샘플 간 z-score를 적용하며, **treated vs control delta**를 별도로 요약합니다.
+:::
+
+```{r enr-progeny-heatmap, fig.width=8.5, fig.height=7}
+pw_path <- file.path(project_root, "results", "pathway_activity", cid,
+                     "progeny_scores.tsv")
+pw <- safe_read(pw_path, sep = "\t")
+
+crow <- contrast_row(cid)
+num  <- if (is.null(crow)) NA else as.character(crow$numerator)
+den  <- if (is.null(crow)) NA else as.character(crow$denominator)
+
+sample_cond <- NULL
+pw_mat <- NULL
+
+if (is.null(pw) || nrow(pw) == 0 ||
+    ncol(pw) < 2 ||
+    all(vapply(pw[, -1, drop = FALSE], function(x) all(is.na(x)), logical(1)))) {
+  no_results("PROGENy scores unavailable or all-NA.")
+} else {
+  sample_col <- names(pw)[1]
+  pw_mat <- as.matrix(pw[, -1, drop = FALSE])
+  rownames(pw_mat) <- as.character(pw[[sample_col]])
+
+  # Per-pathway z-score across samples. With n=3+3 the mean/sd are rough but
+  # centering/scaling still uncouples baseline magnitude from treatment effect.
+  z_mat <- scale(pw_mat)
+  z_mat[is.na(z_mat)] <- 0
+
+  # Order pathways by |mean(num) - mean(den)| on z-scores so the rows most
+  # responsive to the contrast float to the top of the heatmap.
+  cond_lookup <- setNames(as.character(samples$condition),
+                          as.character(samples$sample))
+  sample_cond <- cond_lookup[rownames(z_mat)]
+  num_rows <- which(sample_cond == num)
+  den_rows <- which(sample_cond == den)
+
+  order_metric <- if (length(num_rows) > 0 && length(den_rows) > 0) {
+    abs(colMeans(z_mat[num_rows, , drop = FALSE], na.rm = TRUE) -
+        colMeans(z_mat[den_rows, , drop = FALSE], na.rm = TRUE))
+  } else {
+    apply(z_mat, 2, function(x) diff(range(x, na.rm = TRUE)))
+  }
+  path_order <- names(sort(order_metric, decreasing = TRUE))
+
+  long <- as.data.frame(as.table(z_mat))
+  names(long) <- c("sample", "pathway", "z")
+  long$sample  <- factor(long$sample,  levels = rownames(z_mat))
+  long$pathway <- factor(long$pathway, levels = rev(path_order))
+
+  lim <- max(abs(long$z), na.rm = TRUE)
+  if (!is.finite(lim) || lim == 0) lim <- 1
+
+  p <- ggplot2::ggplot(long,
+          ggplot2::aes(x = sample, y = pathway, fill = z)) +
+    ggplot2::geom_tile(colour = "white", linewidth = 0.25) +
+    ggplot2::scale_fill_gradient2(
+      low = "#2c7bb6", mid = "white", high = "#d7191c",
+      midpoint = 0, limits = c(-lim, lim), na.value = "grey90",
+      name = "z-score"
+    ) +
+    ggplot2::labs(x = NULL, y = NULL,
+                  title = "PROGENy activity, z-scored per pathway",
+                  subtitle = "Rows sorted by |Δ| between contrast groups") +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
+      axis.text.y = ggplot2::element_text(size = 10),
+      plot.margin = ggplot2::margin(6, 10, 12, 10)
+    )
+  p
+}
+```
+
+#### Treated vs control delta (raw scale) + Wilcoxon p
+
+```{r enr-progeny-delta}
+if (is.null(pw) || nrow(pw) == 0 || ncol(pw) < 2 ||
+    is.na(num) || is.na(den) ||
+    !length(which(sample_cond == num)) ||
+    !length(which(sample_cond == den))) {
+  no_results("Delta table not computable (missing contrast or group members).")
+} else {
+  num_idx <- which(sample_cond == num)
+  den_idx <- which(sample_cond == den)
+  stats_df <- do.call(rbind, lapply(colnames(pw_mat), function(path) {
+    a <- pw_mat[num_idx, path]
+    b <- pw_mat[den_idx, path]
+    delta <- mean(a, na.rm = TRUE) - mean(b, na.rm = TRUE)
+    pool_sd <- stats::sd(c(a, b), na.rm = TRUE)
+    effect_size <- if (is.finite(pool_sd) && pool_sd > 0) delta / pool_sd else NA_real_
+    pw_p <- tryCatch(
+      stats::wilcox.test(a, b, exact = FALSE)$p.value,
+      error = function(e) NA_real_
+    )
+    data.frame(pathway = path, delta = delta, effect_size = effect_size,
+               wilcox_p = pw_p, stringsAsFactors = FALSE)
+  }))
+  stats_df$wilcox_padj <- stats::p.adjust(stats_df$wilcox_p, method = "BH")
+  stats_df <- stats_df[order(abs(stats_df$delta), decreasing = TRUE), ]
+  rownames(stats_df) <- NULL
+
+  dt <- report_table(
+    stats_df,
+    rownames = FALSE,
+    caption  = sprintf("PROGENy pathway activity: %s minus %s (n=%d vs %d)",
+                       num, den, length(num_idx), length(den_idx)),
+    options  = list(pageLength = 14, lengthMenu = c(14, 25, 50, 100), dom = "lfrtip", scrollX = TRUE),
+    signif_cols = c("delta", "effect_size", "wilcox_p", "wilcox_padj"),
+    digits  = 3
+  )
+  dt
+}
+```
+
+
+)---"
+````
+
+```{r enr-render, results='asis'}
+if (nrow(contrasts) == 0) {
+  print(no_results("No contrasts defined in contrasts.tsv."))
+}
+
+for (cid in contrasts$contrast_id) {
+  env <- new.env(parent = globalenv())
+  env$cid          <- cid
+  env$project_root <- project_root
+  env$safe_read    <- safe_read
+  env$no_results   <- no_results
+  env$`%||%`       <- `%||%`
+
+  out <- knitr::knit_child(
+    text  = enr_child_template,
+    envir = env,
+    quiet = TRUE
+  )
+  cat(out, sep = "\n")
+}
+```

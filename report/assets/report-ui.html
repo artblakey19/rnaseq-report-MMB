@@ -1,0 +1,154 @@
+<script>
+(function () {
+  function ready(fn) {
+    if (document.readyState !== "loading") fn();
+    else document.addEventListener("DOMContentLoaded", fn);
+  }
+
+  function makeButton(className, label, title) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = className;
+    button.textContent = label;
+    button.setAttribute("aria-label", title);
+    button.title = title;
+    return button;
+  }
+
+  function setupLangToggle() {
+    var STORAGE_KEY = "report-lang";
+    var supported = ["en", "ko"];
+
+    var detect = function () {
+      try {
+        var saved = window.localStorage.getItem(STORAGE_KEY);
+        if (saved && supported.indexOf(saved) !== -1) return saved;
+      } catch (e) { /* localStorage may be blocked */ }
+      var nav = (navigator.language || "en").toLowerCase();
+      return nav.indexOf("ko") === 0 ? "ko" : "en";
+    };
+
+    var apply = function (lang) {
+      supported.forEach(function (l) {
+        document.body.classList.toggle("lang-" + l, l === lang);
+        document.documentElement.classList.toggle("lang-" + l, l === lang);
+      });
+      try { window.localStorage.setItem(STORAGE_KEY, lang); } catch (e) {}
+      var buttons = document.querySelectorAll(".lang-toggle__btn");
+      Array.prototype.forEach.call(buttons, function (b) {
+        var active = b.getAttribute("data-lang") === lang;
+        b.classList.toggle("is-active", active);
+        b.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    };
+
+    var wrap = document.createElement("div");
+    wrap.className = "lang-toggle";
+    wrap.setAttribute("role", "group");
+    wrap.setAttribute("aria-label", "Report language");
+    supported.forEach(function (l) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "lang-toggle__btn";
+      btn.setAttribute("data-lang", l);
+      btn.textContent = l.toUpperCase();
+      btn.title = l === "ko" ? "한국어로 보기" : "View in English";
+      btn.addEventListener("click", function () { apply(l); });
+      wrap.appendChild(btn);
+    });
+    document.body.appendChild(wrap);
+
+    apply(detect());
+  }
+
+  function setupPdfButton() {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pdf-save-btn";
+    btn.setAttribute("aria-label", "Save report as PDF");
+    btn.title = "Save report as PDF (opens print dialog — choose 'Save as PDF')";
+    btn.innerHTML = '<span class="pdf-save-btn__icon" aria-hidden="true">⬇</span>'
+      + '<span class="pdf-save-btn__label">PDF</span>';
+    btn.addEventListener("click", function () {
+      window.print();
+    });
+    document.body.appendChild(btn);
+  }
+
+  function setupTocToggle() {
+    var tocTargets = Array.prototype.slice.call(document.querySelectorAll([
+      "#quarto-sidebar-toc-left",
+      "#quarto-margin-sidebar",
+      "#quarto-sidebar",
+      ".quarto-margin-sidebar",
+      "nav#TOC"
+    ].join(",")));
+    tocTargets = tocTargets.filter(function (target, index, allTargets) {
+      return allTargets.indexOf(target) === index;
+    });
+    if (!tocTargets.length) return;
+
+    var rail = document.createElement("div");
+    rail.className = "toc-control-rail";
+
+    var button = makeButton("toc-toggle", "", "Toggle table of contents");
+    button.setAttribute("aria-expanded", "true");
+    rail.appendChild(button);
+    document.body.appendChild(rail);
+
+    function setCollapsed(collapsed) {
+      document.body.classList.toggle("toc-collapsed", collapsed);
+      document.documentElement.classList.toggle("toc-collapsed", collapsed);
+      tocTargets.forEach(function (target) {
+        target.hidden = collapsed;
+        target.setAttribute("aria-hidden", collapsed ? "true" : "false");
+      });
+      button.classList.toggle("is-collapsed", collapsed);
+      button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+
+      window.setTimeout(function () {
+        window.dispatchEvent(new Event("resize"));
+      }, 50);
+    }
+
+    button.addEventListener("click", function () {
+      setCollapsed(!document.body.classList.contains("toc-collapsed"));
+    });
+  }
+
+  function setupTocCollapsibles() {
+    var toc = document.querySelector("nav#TOC");
+    if (!toc) return;
+
+    Array.prototype.slice.call(toc.querySelectorAll("li")).forEach(function (li) {
+      var children = li.querySelector(":scope > ul");
+      if (!children) return;
+
+      var caret = document.createElement("button");
+      caret.type = "button";
+      caret.className = "toc-caret";
+      caret.setAttribute("aria-expanded", "true");
+      caret.setAttribute("aria-label", "Toggle subsection");
+      caret.title = "Toggle subsection";
+      caret.textContent = "";
+
+      caret.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var collapsed = li.classList.toggle("toc-item-collapsed");
+        caret.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      });
+
+      li.insertBefore(caret, li.firstChild);
+      li.classList.add("toc-has-children");
+    });
+  }
+
+  ready(function () {
+    setupLangToggle();
+    setupTocToggle();
+    setupTocCollapsibles();
+    setupPdfButton();
+  });
+})();
+</script>

@@ -1,0 +1,83 @@
+# QC
+
+::: {.lang-en}
+Per-sample QC metrics from MultiQC output and counts totals.
+:::
+
+::: {.lang-ko}
+MultiQC 출력과 카운트 합계에서 집계한 샘플별 QC 지표.
+:::
+
+```{r qc-load}
+qc_path <- rp("results", "qc", "qc_summary.tsv")
+qc <- safe_read(qc_path, sep = "\t")
+```
+
+```{r qc-table}
+if (is.null(qc) || nrow(qc) == 0) {
+  no_results("QC summary table not available.")
+} else {
+  qc_show <- qc
+  for (col in intersect(c("mapping_rate", "rrna_pct", "duplication"),
+                        names(qc_show))) {
+    if (is.numeric(qc_show[[col]])) {
+      qc_show[[col]] <- signif(qc_show[[col]], 3)
+    }
+  }
+  knitr::kable(qc_show,
+               row.names = FALSE,
+               booktabs  = TRUE,
+               longtable = TRUE,
+               caption   = "Per-sample QC metrics")
+}
+```
+
+## Library size
+
+```{r qc-libsize, fig.width=7, fig.height=3.5}
+if (is.null(qc) || nrow(qc) == 0 || !"assigned_reads" %in% names(qc)) {
+  no_results("Per-sample assigned-read totals not available.")
+} else {
+  df <- qc |>
+    dplyr::mutate(
+      sample    = factor(sample, levels = sample),
+      condition = as.character(condition)
+    )
+  p <- ggplot2::ggplot(df, ggplot2::aes(
+        x = sample, y = assigned_reads, fill = condition
+      )) +
+    ggplot2::geom_col() +
+    ggplot2::scale_y_continuous(labels = scales::comma) +
+    ggplot2::labs(x = NULL, y = "Assigned reads (sum of counts)") +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+  print(p)
+}
+```
+
+## Mapping and duplication rates
+
+```{r qc-rates, fig.width=7, fig.height=3.5}
+if (is.null(qc) || nrow(qc) == 0) {
+  no_results("Mapping / duplication metrics not available.")
+} else {
+  rate_cols <- intersect(c("mapping_rate", "rrna_pct", "duplication"), names(qc))
+  rate_cols <- rate_cols[vapply(rate_cols, function(c) any(!is.na(qc[[c]])), logical(1))]
+  if (length(rate_cols) == 0) {
+    no_results("All rate metrics (mapping_rate / rrna_pct / duplication) are NA.")
+  } else {
+    df <- qc |>
+      dplyr::select(sample, condition, dplyr::all_of(rate_cols)) |>
+      tidyr::pivot_longer(dplyr::all_of(rate_cols),
+                          names_to = "metric", values_to = "value") |>
+      dplyr::mutate(sample = factor(sample, levels = unique(sample)))
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = sample, y = value, fill = condition)) +
+      ggplot2::geom_col() +
+      ggplot2::facet_wrap(~ metric, scales = "free_y") +
+      ggplot2::labs(x = NULL, y = NULL) +
+      ggplot2::theme_minimal(base_size = 11) +
+      ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+    print(p)
+  }
+}
+```

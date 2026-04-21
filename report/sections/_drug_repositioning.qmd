@@ -1,0 +1,160 @@
+# Drug repositioning / connectivity
+
+::: {.lang-en}
+Up/down DEG signatures queried against L2S2. Rows are perturbagens ranked by adjusted *p*-value; `score` is the returned odds ratio.
+:::
+
+::: {.lang-ko}
+Up / down DEG signature를 L2S2에 질의한 결과. 각 행은 조정 *p*-value로 정렬된 perturbagen, `score`는 반환된 odds ratio.
+:::
+
+````{r dr-child-template, include=FALSE}
+dr_child_template <- r"---(
+## `r cid`
+
+```{r dr-input-signature, results='asis'}
+if (is_html_report()) {
+  cat("\n\n<details>\n")
+  cat("<summary><strong>L2S2 input gene signatures</strong></summary>\n\n")
+} else {
+  cat("\n\n### L2S2 input gene signatures\n\n")
+}
+if (is.null(de_tbl) || nrow(de_tbl) == 0) {
+  cat(as.character(no_results("DE results unavailable; L2S2 input signature cannot be reconstructed.")))
+} else {
+  df <- de_tbl |>
+    dplyr::filter(!is.na(gene_name), !is.na(log2FoldChange), !is.na(padj), nzchar(as.character(gene_name))) |>
+    dplyr::arrange(padj)
+
+  up_tbl <- df |>
+    dplyr::filter(log2FoldChange > 0) |>
+    dplyr::distinct(gene_name, .keep_all = TRUE) |>
+    dplyr::slice_head(n = top_up) |>
+    dplyr::mutate(direction = "up", input_rank = dplyr::row_number())
+
+  down_tbl <- df |>
+    dplyr::filter(log2FoldChange < 0) |>
+    dplyr::distinct(gene_name, .keep_all = TRUE) |>
+    dplyr::slice_head(n = top_down) |>
+    dplyr::mutate(direction = "down", input_rank = dplyr::row_number())
+
+  sig_tbl <- dplyr::bind_rows(up_tbl, down_tbl) |>
+    dplyr::select(dplyr::any_of(c(
+      "direction", "input_rank", "gene_id", "gene_name",
+      "log2FoldChange", "pvalue", "padj"
+    )))
+
+  if (nrow(sig_tbl) == 0) {
+    cat(as.character(no_results("No L2S2 input genes selected from DE results.")))
+  } else {
+    sig_counts <- table(factor(sig_tbl$direction, levels = c("up", "down")))
+    dt <- report_table(
+      sig_tbl,
+      rownames = FALSE,
+      filter = "top",
+      caption = sprintf(
+        "L2S2 input signature: %d up / %d down genes ranked by padj",
+        as.integer(sig_counts[["up"]]),
+        as.integer(sig_counts[["down"]])
+      ),
+      extensions = "Buttons",
+      options = list(
+        pageLength = 25,
+        lengthMenu = c(25, 50, 100, 250, 500),
+        scrollX = TRUE,
+        dom = "Blfrtip",
+        buttons = c("csv", "copy")
+      ),
+      signif_cols = intersect(c("log2FoldChange", "pvalue", "padj"), names(sig_tbl)),
+      digits = 3
+    )
+    cat(knitr::knit_print(dt))
+  }
+  cat("\n\n")
+}
+if (is_html_report()) cat("\n</details>\n\n")
+```
+
+### L2S2 hits
+
+```{r dr-l2s2-hits, results='asis', fig.width=8.5, fig.height=8}
+hits_path <- file.path(project_root, "results", "drug_repositioning", cid,
+                       "l2s2_hits.tsv")
+hits <- safe_read(hits_path, sep = "\t")
+if (is.null(hits) || nrow(hits) == 0) {
+  cat(as.character(no_results("L2S2 query returned no hits (or call failed; see log).")))
+} else {
+  top <- hits |>
+    dplyr::arrange(dplyr::desc(abs(score %||% 0)), fdr) |>
+    head(30) |>
+    dplyr::mutate(
+      label = ifelse(is.na(perturbagen) | !nzchar(as.character(perturbagen)),
+                     paste0("row_", dplyr::row_number()),
+                     as.character(perturbagen)),
+      label = factor(label, levels = rev(label))
+    )
+  if (nrow(top) > 0 && any(!is.na(top$score))) {
+    p <- ggplot2::ggplot(top, ggplot2::aes(x = score, y = label,
+                                           fill = ifelse(score > 1, "induce",
+                                                         "reverse"))) +
+      ggplot2::geom_col() +
+      ggplot2::scale_fill_manual(values = c(induce = "#e67e22",
+                                            reverse = "#2c7bb6"),
+                                 name = "direction") +
+      ggplot2::geom_vline(xintercept = 1, linetype = "dashed",
+                          colour = "grey40") +
+      ggplot2::labs(x = "odds ratio (score)", y = NULL,
+                    title = "Top 30 perturbagens") +
+      ggplot2::theme_minimal(base_size = 11) +
+      ggplot2::theme(
+        axis.text.y = ggplot2::element_text(size = 9),
+        plot.margin = ggplot2::margin(6, 10, 6, 6)
+      )
+    print(p)
+    cat("\n\n")
+  }
+
+  dt <- report_table(
+    head(hits, 500),
+    rownames = FALSE,
+    filter   = "top",
+    extensions = "Buttons",
+    options  = list(pageLength = 10, lengthMenu = c(10, 25, 50, 100), scrollX = TRUE, dom = "Blfrtip",
+                    buttons = c("csv", "copy")),
+    signif_cols = intersect(c("score", "pvalue", "fdr"), names(hits)),
+    digits  = 3
+  )
+  cat(knitr::knit_print(dt))
+  cat("\n\n")
+}
+```
+
+)---"
+````
+
+```{r dr-render, results='asis'}
+if (nrow(contrasts) == 0) {
+  print(no_results("No contrasts defined in contrasts.tsv."))
+}
+
+for (cid in contrasts$contrast_id) {
+  de_tbl <- safe_read(file.path(project_root, "results", "de", cid, "deseq2_results.csv"))
+  
+  env <- new.env(parent = globalenv())
+  env$cid          <- cid
+  env$project_root <- project_root
+  env$safe_read    <- safe_read
+  env$no_results   <- no_results
+  env$de_tbl       <- de_tbl
+  env$top_up       <- cfg$drug_repositioning$top_up %||% 250
+  env$top_down     <- cfg$drug_repositioning$top_down %||% 250
+  env$`%||%`       <- `%||%`
+
+  out <- knitr::knit_child(
+    text  = dr_child_template,
+    envir = env,
+    quiet = TRUE
+  )
+  cat(out, sep = "\n")
+}
+```

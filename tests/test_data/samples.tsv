@@ -1,0 +1,7 @@
+sample	condition	replicate	batch
+Control_1	Control	1	1
+Control_2	Control	2	1
+Control_3	Control	3	1
+Treatment_1	Treatment	1	1
+Treatment_2	Treatment	2	1
+Treatment_3	Treatment	3	1

@@ -1,0 +1,248 @@
+# Differential expression
+
+::: {.lang-en}
+Per-contrast DESeq2 results (Wald test, apeglm-shrunken LFC). Significance tiers in the DEG summary come from `config.yaml` (primary / secondary).
+:::
+
+::: {.lang-ko}
+Contrast별 DESeq2 결과 (Wald test + apeglm-shrunken LFC). DEG 요약의 유의성 tier는 `config.yaml`의 primary / secondary 설정을 사용합니다.
+:::
+
+````{r de-child-template, include=FALSE}
+# Child template rendered once per contrast. Outer chunk uses a 4-backtick
+# fence so the 3-backtick chunk fences inside the string are not parsed by
+# pandoc. Each contrast has its own env so variables do not bleed.
+de_child_template <- r"---(
+## `r cid`
+
+`r contrast_desc`
+
+### DEG summary
+
+```{r de-deg-summary, results='asis'}
+if (is.null(deg_sum) || nrow(deg_sum) == 0) {
+  cat(as.character(no_results("DEG summary table not produced.")))
+} else {
+  print(knitr::kable(deg_sum, caption = sprintf("DEG counts for %s", cid)))
+}
+```
+
+### Volcano plot
+
+```{r de-volcano, fig.width=8.5, fig.height=6}
+if (is.null(de_tbl) || nrow(de_tbl) == 0) {
+  no_results("DE result table is empty.")
+} else {
+  v_df <- de_tbl |>
+    dplyr::mutate(
+      neglog10p = -log10(pmax(pvalue, 1e-300)),
+      sig = dplyr::case_when(
+        is.na(padj)                                         ~ "ns",
+        padj < prim_padj & abs(log2FoldChange) >= prim_lfc  ~ "primary",
+        padj < sec_padj  & abs(log2FoldChange) >= sec_lfc   ~ "secondary",
+        TRUE                                                ~ "ns"
+      )
+    )
+  pal <- c(primary = "#c0392b", secondary = "#e67e22")
+
+  # Non-significant points: static gray background, no hover, capped at 3k by
+  # random subsample (purely visual). Significant points (primary+secondary)
+  # keep full interactive hover with gene labels.
+  sig_df <- v_df |> dplyr::filter(sig != "ns")
+  ns_df  <- v_df |> dplyr::filter(sig == "ns")
+  ns_cap <- 3000L
+  if (nrow(ns_df) > ns_cap) {
+    set.seed(42)
+    ns_df <- ns_df[sample.int(nrow(ns_df), ns_cap), , drop = FALSE]
+  }
+
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_point(
+      data = ns_df,
+      ggplot2::aes(x = log2FoldChange, y = neglog10p),
+      colour = "grey70", alpha = 0.45, size = 1.1
+    ) +
+    ggplot2::geom_point(
+      data = sig_df,
+      ggplot2::aes(x = log2FoldChange, y = neglog10p, colour = sig,
+                   text = sprintf("%s | LFC=%.2f | padj=%.2g",
+                                  gene_name, log2FoldChange, padj)),
+      alpha = 0.85, size = 1.6
+    ) +
+    ggplot2::scale_colour_manual(values = pal) +
+    ggplot2::geom_vline(xintercept = c(-prim_lfc, prim_lfc), linetype = "dashed",
+                        colour = "grey40") +
+    ggplot2::geom_hline(yintercept = -log10(prim_padj), linetype = "dashed",
+                        colour = "grey40") +
+    ggplot2::labs(x = "log2FoldChange (apeglm)", y = "-log10(pvalue)",
+                  colour = "tier") +
+    ggplot2::theme_minimal(base_size = 12)
+
+  if (is_html_report()) {
+    fig <- plotly::ggplotly(p, tooltip = "text", height = 550)
+    # Kill hover on the ns (static) trace — it is the first geom, trace index 0.
+    fig <- plotly::style(fig, hoverinfo = "skip", traces = 0)
+    plotly::layout(fig, margin = list(t = 30, b = 40, l = 50, r = 20))
+  } else {
+    p
+  }
+}
+```
+
+### MA plot
+
+```{r de-ma, fig.width=8.5, fig.height=5.5}
+if (is.null(de_tbl) || nrow(de_tbl) == 0) {
+  no_results("DE result table is empty.")
+} else {
+  ma_df <- de_tbl |>
+    dplyr::mutate(
+      sig = !is.na(padj) & padj < prim_padj & abs(log2FoldChange) >= prim_lfc
+    )
+  p <- ggplot2::ggplot(ma_df,
+           ggplot2::aes(x = log10(pmax(baseMean, 1)), y = log2FoldChange,
+                        colour = sig)) +
+    ggplot2::geom_point(alpha = 0.5, size = 1.2) +
+    ggplot2::scale_colour_manual(values = c(`TRUE` = "#c0392b", `FALSE` = "grey60")) +
+    ggplot2::geom_hline(yintercept = 0, colour = "grey40") +
+    ggplot2::labs(x = "log10(baseMean)", y = "log2FoldChange (apeglm)",
+                  colour = sprintf("padj<%.2g & |LFC|>=%.2g", prim_padj, prim_lfc)) +
+    ggplot2::theme_minimal(base_size = 12)
+  p
+}
+```
+
+### Top DEG heatmap (VST, row z-score)
+
+```{r de-top-heatmap, fig.width=8.5, fig.height=9}
+if (is.null(de_tbl) || nrow(de_tbl) == 0 || is.null(vst_mat)) {
+  no_results("VST matrix or DE results unavailable for heatmap.")
+} else {
+  cand <- de_tbl |>
+    dplyr::filter(!is.na(padj), !is.na(log2FoldChange)) |>
+    dplyr::arrange(padj)
+  top <- head(cand, 30)
+  if (nrow(top) == 0) {
+    no_results("No genes with finite padj/LFC for heatmap.")
+  } else {
+    rows <- intersect(top$gene_id, rownames(vst_mat))
+    if (length(rows) < 2) {
+      no_results("Fewer than 2 top genes found in VST matrix.")
+    } else {
+      M <- vst_mat[rows, , drop = FALSE]
+      label_map <- setNames(top$gene_name, top$gene_id)
+      rn <- ifelse(is.na(label_map[rows]) | !nzchar(label_map[rows]),
+                   rows, label_map[rows])
+      rn <- make.unique(rn)
+      rownames(M) <- rn
+      Z <- t(scale(t(M)))
+      
+      # Perform hierarchical clustering for rows and columns
+      row_hc <- hclust(dist(Z), method = "average")
+      col_hc <- hclust(dist(t(Z)), method = "average")
+      
+      long <- as.data.frame(as.table(Z))
+      names(long) <- c("gene", "sample", "z")
+      long$gene <- factor(long$gene, levels = rownames(Z)[row_hc$order])
+      long$sample <- factor(long$sample, levels = colnames(Z)[col_hc$order])
+
+      p <- ggplot2::ggplot(long, ggplot2::aes(x = sample, y = gene, fill = z)) +
+        ggplot2::geom_tile() +
+        ggplot2::scale_fill_gradient2(low = "#2c7bb6", mid = "white",
+                                      high = "#d7191c", midpoint = 0) +
+        ggplot2::labs(x = NULL, y = NULL, fill = "z-score") +
+        ggplot2::theme_minimal(base_size = 11) +
+        ggplot2::theme(
+          axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
+          axis.text.y = ggplot2::element_text(size = 9),
+          plot.margin = ggplot2::margin(6, 10, 12, 6)
+        )
+      p
+    }
+  }
+}
+```
+
+### Full DE result table
+
+```{r de-results-table}
+if (is.null(de_tbl) || nrow(de_tbl) == 0) {
+  no_results("DE result table is empty.")
+} else {
+  show_cols <- c("gene_id", "gene_name", "baseMean",
+                 "log2FoldChange", "lfcSE", "stat", "pvalue", "padj")
+  show_cols <- intersect(show_cols, names(de_tbl))
+  de_show <- head(dplyr::arrange(de_tbl, padj), 500)[, show_cols, drop = FALSE]
+  report_table(
+    de_show,
+    rownames = FALSE,
+    filter = "top",
+    extensions = "Buttons",
+    options  = list(pageLength = 10, lengthMenu = c(10, 25, 50, 100), scrollX = TRUE, dom = "Blfrtip",
+                    buttons = c("csv", "copy")),
+    signif_cols = intersect(c("baseMean", "log2FoldChange", "lfcSE",
+                          "stat", "pvalue", "padj"), show_cols),
+    digits  = 3
+  )
+}
+```
+
+)---"
+````
+
+```{r de-render, results='asis'}
+prim <- cfg$de$primary   %||% list(padj = 0.05, abs_lfc = 1)
+sec  <- cfg$de$secondary %||% list(padj = 0.10, abs_lfc = 0.5)
+
+dds_path <- rp("results", "exploratory", "dds_vst.rds")
+vst_mat  <- NULL
+if (file.exists(dds_path)) {
+  dds_obj <- tryCatch(readRDS(dds_path), error = function(e) NULL)
+  if (!is.null(dds_obj)) {
+    vst_mat <- tryCatch(
+      SummarizedExperiment::assay(dds_obj),
+      error = function(e) tryCatch(as.matrix(dds_obj@assays@data[[1]]),
+                                   error = function(e2) NULL)
+    )
+  }
+}
+
+if (nrow(contrasts) == 0) {
+  cat("\n")
+  print(no_results("No contrasts defined in contrasts.tsv."))
+}
+
+for (cid in contrasts$contrast_id) {
+  crow <- contrast_row(cid)
+  contrast_desc <- sprintf(
+    "Numerator: **%s** · Denominator: **%s** · Factor: **%s**%s",
+    crow$numerator, crow$denominator, crow$factor,
+    if (!is.null(crow$description) && nzchar(as.character(crow$description)))
+      paste0(" · _", crow$description, "_") else ""
+  )
+
+  de_tbl  <- safe_read(rp("results", "de", cid, "deseq2_results.csv"))
+  deg_sum <- safe_read(rp("results", "de", cid, "deg_summary.tsv"), sep = "\t")
+
+  env <- new.env(parent = globalenv())
+  env$cid           <- cid
+  env$contrast_desc <- contrast_desc
+  env$de_tbl        <- de_tbl
+  env$deg_sum       <- deg_sum
+  env$vst_mat       <- vst_mat
+  env$prim_padj     <- prim$padj
+  env$prim_lfc      <- prim$abs_lfc
+  env$sec_padj      <- sec$padj
+  env$sec_lfc       <- sec$abs_lfc
+  env$no_results    <- no_results
+  env$cfg           <- cfg
+  env$`%||%`        <- `%||%`
+
+  out <- knitr::knit_child(
+    text  = de_child_template,
+    envir = env,
+    quiet = TRUE
+  )
+  cat(out, sep = "\n")
+}
+```
