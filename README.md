@@ -1,30 +1,22 @@
 # Bulk RNA-seq Analysis Report Workflow
 
+[![Smoke test](https://github.com/artblakey19/rnaseq-report-MMB/actions/workflows/test.yml/badge.svg)](https://github.com/artblakey19/rnaseq-report-MMB/actions/workflows/test.yml)
+[![Docker](https://github.com/artblakey19/rnaseq-report-MMB/actions/workflows/docker.yml/badge.svg)](https://github.com/artblakey19/rnaseq-report-MMB/actions/workflows/docker.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+[![run with conda](https://img.shields.io/badge/run%20with-conda-44A833?logo=anaconda&logoColor=white)](https://docs.conda.io)
+[![run with docker](https://img.shields.io/badge/run%20with-docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com)
+[![run with jupyter](https://img.shields.io/badge/run%20with-jupyter-F37626?logo=jupyter&logoColor=white)](https://jupyter.org)
+
 <sub>**EN** · [한국어](README.ko.md)</sub>
 
 Snakemake pipeline that takes salmon gene-count output from **nf-core/rnaseq** and produces HTML reports combining **MultiQC**, **DESeq2**, **GSEA (MSigDB)**, **ORA (clusterProfiler)**, **TFEA (CollecTRI)**, **PROGENy pathway scoring**, and **L2S2 (LINCS L1000) cMap** results.
 
 ## Workflow
-```
-nf-core/rnaseq ─► salmon counts + multiqc_data
-                        │
-                        ▼
-   ┌─ Snakemake ──────────────────────────────────────┐
-   │                                                  │
-   │  MultiQC summary            (QC)                 │
-   │  DESeq2 VST → PCA · corr    (exploratory)        │
-   │  DESeq2 + apeglm            (differential)       │
-   │   ├─► fgsea (MSigDB)        (GSEA)               │
-   │   ├─► clusterProfiler       (ORA)                │
-   │   ├─► decoupleR + CollecTRI (TFEA)               │
-   │   └─► L2S2 / LINCS L1000    (cMap)               │
-   │  decoupleR + PROGENy        (pathway activity)   │
-   │                                                  │
-   └──────────────────────┬───────────────────────────┘
-                          │
-                          ▼
-                 Quarto report (HTML)
-```
+
+![rulegraph](docs/rulegraph.svg)
+
+<sub>Regenerate: `bash docs/generate_rulegraph.sh` (requires graphviz).</sub>
 ---
 
 ## Quick start
@@ -39,7 +31,7 @@ python3 -m venv .venv
 # 2. Generate config (enter sample information at the prompts)
 .venv/bin/python workflow/scripts/init_project.py
 
-# 3. Dry-run
+# 3. Dry-run (optional — verifies DAG before running)
 .venv/bin/snakemake \
   --snakefile workflow/Snakefile \
   --configfile config/config.yaml \
@@ -49,7 +41,7 @@ python3 -m venv .venv
 .venv/bin/snakemake \
   --snakefile workflow/Snakefile \
   --configfile config/config.yaml \
-  --use-conda -c1
+  --use-conda --cores all
 ```
 
 HTML report is written to `results/report/report.html`.
@@ -76,7 +68,7 @@ docker run --rm -it \
 docker run --rm \
     -v "$PWD":/project \
     ghcr.io/artblakey19/bulk-rnaseq:latest \
-    --configfile config/config.yaml -c1
+    --configfile config/config.yaml --cores all
 ```
 
 ---

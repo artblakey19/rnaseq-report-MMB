@@ -1,4 +1,4 @@
-name: Build and publish Docker images
+name: Docker
 
 # Publishes both container images to GitHub Container Registry:
 #   ghcr.io/<owner>/bulk-rnaseq          (main pipeline)
