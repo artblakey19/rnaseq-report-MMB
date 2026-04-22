@@ -33,15 +33,15 @@ enrichment:
     max_size: 500
     seed: 42
     collections:
-      - "H"
+      - {id: H, label: Hallmark}
   ora:
     min_input_genes: 100
     max_input_genes: 500
     databases:
-      - "GO_BP"
-      - "KEGG"
-      - "Reactome"
-      - "Hallmark"
+      - {id: GO_BP,    label: "GO Biological Process"}
+      - {id: KEGG,     label: KEGG}
+      - {id: Reactome, label: Reactome}
+      - {id: Hallmark, label: Hallmark}
 
 tfea:
   tool: "decoupler"
