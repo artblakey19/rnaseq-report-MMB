@@ -22,6 +22,7 @@ REPO_ROOT = Path(os.environ.get("PROJECT_ROOT") or Path(__file__).resolve().pare
 DEFAULT_CONFIG = REPO_ROOT / "config" / "config.yaml"
 DEFAULT_SAMPLES = REPO_ROOT / "config" / "samples.tsv"
 DEFAULT_CONTRASTS = REPO_ROOT / "config" / "contrasts.tsv"
+CONFIG_TEMPLATE = REPO_ROOT / "config" / "config.template.yaml"
 
 
 def prompt(message: str, default: str | None = None) -> str:
@@ -53,9 +54,12 @@ def read_sample_names(counts_path: Path) -> list[str]:
 
 
 def load_existing_config(path: Path) -> dict:
-    if not path.exists():
-        raise SystemExit(f"config template missing: {path}")
-    with path.open() as f:
+    # Prefer the user's existing config (re-running init preserves prior values);
+    # fall back to the committed template for a first-time run.
+    source = path if path.exists() else CONFIG_TEMPLATE
+    if not source.exists():
+        raise SystemExit(f"config template missing: {CONFIG_TEMPLATE}")
+    with source.open() as f:
         return yaml.safe_load(f)
 
 
