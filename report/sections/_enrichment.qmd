@@ -1,11 +1,11 @@
 # Functional enrichment
 
 ::: {.lang-en}
-Per-contrast GSEA (primary), ORA (supplementary), TF activity (CollecTRI / ULM), and PROGENy pathway activity. Empty outputs are marked inline.
+Per-contrast GSEA, ORA, TF activity (CollecTRI / ULM), and PROGENy pathway activity.
 :::
 
 ::: {.lang-ko}
-Contrast별 GSEA(1차), ORA(보조), TF 활성도(CollecTRI / ULM), PROGENy pathway 활성도. 빈 출력은 해당 위치에 안내로 표시됩니다.
+Contrast별 GSEA, ORA, TFEA (CollecTRI / ULM), PROGENy pathway 활성도.
 :::
 
 ````{r enr-child-template, include=FALSE}

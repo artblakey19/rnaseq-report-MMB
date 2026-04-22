@@ -1,11 +1,11 @@
 # Exploratory analysis
 
 ::: {.lang-en}
-VST-normalised counts (blind = TRUE); PCA and sample correlation use the top 500 most-variable genes.
+VST-normalised counts (blind = TRUE); using the top 500 most-variable genes.
 :::
 
 ::: {.lang-ko}
-VST 정규화 카운트(blind = TRUE); PCA와 샘플 상관 모두 variable 상위 500개 유전자를 사용합니다.
+VST 정규화 카운트(blind = TRUE); variable 상위 500개 유전자를 사용.
 :::
 
 ```{r expl-load}
@@ -16,7 +16,7 @@ pca_obj <- if (file.exists(pca_path)) readRDS(pca_path) else NULL
 cor_obj <- if (file.exists(cor_path)) readRDS(cor_path) else NULL
 ```
 
-## PCA (top 500 variable genes)
+## PCA
 
 ```{r expl-pca, fig.width=7.5, fig.height=5.5}
 if (is.null(pca_obj) || is.null(pca_obj$scores) || nrow(pca_obj$scores) == 0) {
@@ -64,7 +64,7 @@ if (is.null(pca_obj) || is.null(pca_obj$var_explained) || length(pca_obj$var_exp
 }
 ```
 
-## Sample-sample correlation (Spearman on top-500 variable VST genes)
+## Sample correlation
 
 ```{r expl-corheat, fig.width=7.5, fig.height=6.5}
 if (is.null(cor_obj) || is.null(cor_obj$spearman)) {

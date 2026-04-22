@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.6
-#
 # Bulk RNA-seq downstream pipeline — container image.
 #
 # Multi-arch: linux/amd64 + linux/arm64 (Apple Silicon).
@@ -15,9 +13,19 @@
 #   docker buildx build --platform linux/amd64,linux/arm64 \
 #       -t bulk-rnaseq:latest --load .
 #
-# Run (mount project at /project, pass snakemake args as CMD):
-#   docker run --rm -v "$PWD":/project bulk-rnaseq -c1
-#   docker run --rm -v "$PWD":/project bulk-rnaseq --configfile config/config.yaml -n
+# Run (bind-mount project at /project, pass snakemake args as CMD):
+#   docker run --rm \
+#       -u "$(id -u):$(id -g)" \
+#       -e HOME=/tmp \
+#       -v "$PWD":/project \
+#       bulk-rnaseq -c1
+#
+#   The -u/-e HOME flags are not optional:
+#     -u $(id -u):$(id -g)  → make outputs in .snakemake/ and results/ owned
+#                              by the host user (avoid root-owned files).
+#     -e HOME=/tmp          → conda/mamba need a writable HOME for cache;
+#                              the image's mambauser HOME is not writable when
+#                              the user is overridden.
 
 FROM mambaorg/micromamba:latest
 
@@ -37,6 +45,7 @@ USER $MAMBA_USER
 # conda env under workflow/envs/*.yaml is resolved lazily at runtime.
 RUN micromamba install -y -n base -c conda-forge -c bioconda \
         snakemake \
+        conda \
         mamba \
         pandas \
         pyyaml \

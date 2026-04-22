@@ -1,11 +1,11 @@
 # Differential expression
 
 ::: {.lang-en}
-Per-contrast DESeq2 results (Wald test, apeglm-shrunken LFC). Significance tiers in the DEG summary come from `config.yaml` (primary / secondary).
+Per-contrast DESeq2 results (Wald test, apeglm-shrunken LFC). DEG cutoffs from `config.yaml` (primary / secondary). `log2FoldChange` is apeglm-shrunken and `padj` is B-H adjusted p-value.
 :::
 
 ::: {.lang-ko}
-Contrast별 DESeq2 결과 (Wald test + apeglm-shrunken LFC). DEG 요약의 유의성 tier는 `config.yaml`의 primary / secondary 설정을 사용합니다.
+Contrast별 DESeq2 결과. DEG cutoff는 `config.yaml`의 primary / secondary 설정 사용. LFC는 apeglm 적용, padj는 B-H method 사용하였음.
 :::
 
 ````{r de-child-template, include=FALSE}

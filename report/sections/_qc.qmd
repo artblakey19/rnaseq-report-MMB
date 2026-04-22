@@ -1,11 +1,11 @@
 # QC
 
 ::: {.lang-en}
-Per-sample QC metrics from MultiQC output and counts totals.
+Per-sample QC metrics from MultiQC output.
 :::
 
 ::: {.lang-ko}
-MultiQC 출력과 카운트 합계에서 집계한 샘플별 QC 지표.
+MultiQC 출력에서 집계한 샘플별 QC 지표.
 :::
 
 ```{r qc-load}

@@ -37,16 +37,34 @@ a {
   text-underline-offset: 0.16em;
 }
 
-/* Wider, cleaner page shell */
-#quarto-content.page-columns {
-  column-gap: 1.15rem;
+/* Wider, cleaner page shell.
+   Quarto's default toc-left grid reserves 5fr "sidebar-gutter" and 5fr
+   "margin-gutter" tracks, which on wide monitors push the TOC inward and
+   leave a big dead zone to the right of the body. Collapse those gutters
+   so the TOC hugs the left edge and body content takes the remainder.
+   Scoped to wider viewports so Quarto's narrow single-column grid still
+   applies on small screens. */
+@media (min-width: 901px) {
+  #quarto-content.page-columns,
+  #quarto-content.page-columns.toc-left {
+    grid-template-columns:
+      [screen-start screen-start-inset] 0.35rem
+      [page-start page-start-inset body-start-outset] minmax(210px, 225px)
+      [body-start] 1rem
+      [body-content-start] minmax(0, 1fr)
+      [body-content-end body-end body-end-outset page-end-inset page-end] 0.5rem
+      [screen-end-inset screen-end] 0 !important;
+    column-gap: 0 !important;
+  }
 }
 
 main.content {
-  /* TOC shown: use nearly all remaining viewport so wide tables / heatmaps
-     don't get horizontally clipped. */
-  width: clamp(1045px, calc(100vw - 400px), 2510px);
-  max-width: calc(100vw - 1.5rem);
+  /* TOC shown: clamp similar to collapsed view so figures fit a single
+     viewport; centred inside the grid column. */
+  position: relative;
+  width: clamp(820px, 70vw, 1320px);
+  max-width: 100%;
+  margin-inline: auto;
   background: var(--report-surface);
   border: 1px solid var(--report-line-soft);
   border-radius: 6px;
@@ -92,26 +110,27 @@ main.content {
 /* Slimmer TOC column — toggle button now floats above the panel so the
    panel itself doesn't need to reserve vertical/horizontal slack for it. */
 #quarto-sidebar-toc-left {
-  max-width: 210px;
+  max-width: 225px;
 }
 
 #quarto-sidebar-toc-left.sidebar {
-  padding: 0.55rem 0.55rem 1rem 0.7rem;
+  padding: 3.1rem 0.6rem 1.2rem 0.8rem;
 }
 
 nav#TOC {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
+  line-height: 1.42;
 }
 
 nav#TOC #toc-title {
-  margin: 0 0 0.7rem 0;
-  padding: 0 0 0.45rem 0;
+  margin: 0 0 0.9rem 0;
+  padding: 0 0 0.5rem 0;
   border: 0;
   border-bottom: 1px solid var(--report-line-soft);
   color: #1f2937;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
@@ -122,28 +141,29 @@ nav#TOC ul {
 }
 
 nav#TOC > ul > li {
-  margin: 0.08rem 0 0.42rem 0;
+  margin: 0.15rem 0 0.6rem 0;
 }
 
 nav#TOC ul ul {
   display: block;
-  margin: 0.14rem 0 0.24rem 0.55rem;
-  padding-left: 0.65rem;
+  margin: 0.22rem 0 0.32rem 0.55rem;
+  padding-left: 0.7rem;
   border-left: 1px solid #d7e0eb;
 }
 
 nav#TOC ul ul ul {
   margin-left: 0.35rem;
-  padding-left: 0.55rem;
+  padding-left: 0.6rem;
   border-left-style: dashed;
 }
 
 nav#TOC .nav-link {
   color: #4b5563;
   border-left: 2px solid transparent;
-  padding: 0.24rem 0.55rem;
-  margin: 0.04rem 0;
+  padding: 0.34rem 0.6rem;
+  margin: 0.08rem 0;
   border-radius: 4px;
+  line-height: 1.42;
 }
 
 nav#TOC > ul > li > .nav-link {
@@ -153,15 +173,15 @@ nav#TOC > ul > li > .nav-link {
 
 nav#TOC ul ul .nav-link {
   color: #5f6b7a;
-  font-size: 0.79rem;
+  font-size: 0.81rem;
   font-weight: 500;
-  padding-top: 0.18rem;
-  padding-bottom: 0.18rem;
+  padding-top: 0.28rem;
+  padding-bottom: 0.28rem;
 }
 
 nav#TOC ul ul ul .nav-link {
   color: #6b7280;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
 }
 
 nav#TOC .nav-link.active,
@@ -210,7 +230,7 @@ body.toc-collapsed main.content {
 .toc-toggle {
   position: absolute;
   left: 0.55rem;
-  top: 0.5rem;
+  top: 1.4rem;
   width: 20px;
   height: 20px;
   border: 1px solid var(--report-line);
@@ -633,9 +653,9 @@ pre {
    ================================================================ */
 
 .lang-toggle {
-  position: fixed;
-  top: 0.7rem;
-  right: 5.2rem;
+  position: absolute;
+  top: 1rem;
+  right: 5rem;
   z-index: 3001;
   display: inline-flex;
   border: 1px solid var(--report-line);
@@ -685,8 +705,8 @@ body.lang-ko .lang-en {
    ================================================================ */
 
 .pdf-save-btn {
-  position: fixed;
-  top: 0.7rem;
+  position: absolute;
+  top: 1rem;
   right: 1rem;
   z-index: 3001;
   display: inline-flex;

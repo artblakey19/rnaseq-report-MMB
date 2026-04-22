@@ -2,7 +2,7 @@
 
 <sub>**EN** · [한국어](README.ko.md)</sub>
 
-Snakemake pipeline that takes salmon gene-count output from **nf-core/rnaseq** and produces HTML / PDF reports combining **MultiQC**, **DESeq2**, **GSEA (MSigDB)**, **ORA (clusterProfiler)**, **TFEA (CollecTRI)**, **PROGENy pathway scoring**, and **L2S2 (LINCS L1000) cMap** results.
+Snakemake pipeline that takes salmon gene-count output from **nf-core/rnaseq** and produces HTML reports combining **MultiQC**, **DESeq2**, **GSEA (MSigDB)**, **ORA (clusterProfiler)**, **TFEA (CollecTRI)**, **PROGENy pathway scoring**, and **L2S2 (LINCS L1000) cMap** results.
 
 ## Workflow
 ```
@@ -47,7 +47,7 @@ python3 -m venv .venv
   --use-conda -c1
 ```
 
-HTML report is written to `results/report/report.html`. Export PDF via the button in the top-right of the report.
+HTML report is written to `results/report/report.html`.
 
 ### Initial setup
 
@@ -58,6 +58,43 @@ Run the command below, then enter sample information at the prompts.
 ```
 
 Generates `config/config.yaml`, `config/samples.tsv`, `config/contrasts.tsv`.
+
+---
+
+## Docker
+
+Self-contained image bundling Snakemake + conda/mamba. Per-rule R/Python envs
+are built on first run and cached under `.snakemake/conda/` on the mounted
+project directory.
+
+```bash
+# Build (linux/amd64; on Apple Silicon docker build also produces linux/arm64)
+docker build -t bulk-rnaseq:latest .
+
+# Run on the shipped fixture
+docker run --rm \
+    -u "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -v "$PWD":/project \
+    bulk-rnaseq:latest \
+    --configfile tests/test_data/config_test.yaml -c1
+
+# Run on your project (config.yaml + counts + multiqc_data on host)
+docker run --rm \
+    -u "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -v "$PWD":/project \
+    bulk-rnaseq:latest \
+    --configfile config/config.yaml -c1
+```
+
+`-u` and `-e HOME` are required:
+
+- `-u "$(id -u):$(id -g)"` writes outputs in `.snakemake/`, `results/`, `logs/`
+  as the host user; without it those files end up owned by root inside the
+  container.
+- `-e HOME=/tmp` gives conda/mamba a writable HOME for its cache; the image's
+  default `mambauser` HOME is not writable once the user is overridden.
 
 ---
 

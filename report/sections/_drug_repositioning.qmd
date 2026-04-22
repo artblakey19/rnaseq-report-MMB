@@ -1,11 +1,11 @@
 # Drug repositioning / connectivity
 
 ::: {.lang-en}
-Up/down DEG signatures queried against L2S2. Rows are perturbagens ranked by adjusted *p*-value; `score` is the returned odds ratio.
+Up/down DEG signatures queried against L2S2. Rows are perturbagens ranked by adjusted *p*-value; `score` is the odds ratio.
 :::
 
 ::: {.lang-ko}
-Up / down DEG signature를 L2S2에 질의한 결과. 각 행은 조정 *p*-value로 정렬된 perturbagen, `score`는 반환된 odds ratio.
+Up / down DEG signature를 L2S2에 Query한 결과. 각 행은 조정 *p*-value로 정렬된 perturbagen, `score`는 odds ratio.
 :::
 
 ````{r dr-child-template, include=FALSE}
