@@ -15,25 +15,22 @@ enr_child_template <- r"---(
 ### GSEA
 
 ```{r enr-gsea, results='asis', fig.width=9, fig.height=8}
-gsea_names <- c(Hallmark     = "gsea_hallmark.csv",
-                Reactome     = "gsea_reactome.csv",
-                WikiPathways = "gsea_wikipathways.csv",
-                PID          = "gsea_pid.csv",
-                BioCarta     = "gsea_biocarta.csv",
-                CGP          = "gsea_cgp.csv",
-                Oncogenic    = "gsea_oncogenic.csv")
-gsea_paths <- setNames(
-  file.path(project_root, "results", "enrichment", cid, gsea_names),
-  names(gsea_names)
-)
-gsea_list <- lapply(gsea_paths, function(p) safe_read(p))
-gsea_all <- dplyr::bind_rows(
-  Filter(function(d) !is.null(d) && nrow(d) > 0, gsea_list),
-  .id = "group"
-)
+gsea_path <- file.path(project_root, "results", "enrichment", cid, "gsea_combined.csv")
+gsea_all <- safe_read(gsea_path)
 
-# Shorten long pathway names for plot labels only. Full names remain available
-# in the DT tables, where the name columns wrap and can be resized.
+.collection_label <- function(id) {
+  labels <- c(
+    H                    = "Hallmark",
+    C6                   = "Oncogenic",
+    `C2:CP:REACTOME`     = "Reactome",
+    `C2:CP:WIKIPATHWAYS` = "WikiPathways",
+    `C2:CP:PID`          = "PID",
+    `C2:CP:BIOCARTA`     = "BioCarta",
+    `C2:CGP`             = "CGP"
+  )
+  ifelse(id %in% names(labels), unname(labels[id]), id)
+}
+
 .trunc_label <- function(x, n = 50) {
   x <- as.character(x)
   ifelse(nchar(x) > n, paste0(substr(x, 1, n - 1), "..."), x)
@@ -49,21 +46,18 @@ gsea_all <- dplyr::bind_rows(
     dplyr::ungroup()
 }
 
-if (nrow(gsea_all) == 0) {
+if (is.null(gsea_all) || nrow(gsea_all) == 0) {
   cat(as.character(no_results("GSEA returned no enriched sets for this contrast.")))
 } else {
-  nonempty_grps <- Filter(
-    function(g) {
-      d <- gsea_list[[g]]
-      !is.null(d) && nrow(d) > 0
-    },
-    names(gsea_list)
-  )
-  if (is_html_report() && length(nonempty_grps) > 0) {
+  colls <- unique(as.character(gsea_all$collection))
+  colls <- colls[!is.na(colls) & nzchar(colls)]
+  if (is_html_report() && length(colls) > 0) {
     cat("\n\n::: {.panel-tabset}\n\n")
   }
-  for (grp in nonempty_grps) {
-    df <- gsea_list[[grp]]
+  for (coll in colls) {
+    df <- gsea_all |> dplyr::filter(collection == coll)
+    if (nrow(df) == 0) next
+    grp <- .collection_label(coll)
     cat(sprintf("\n\n#### %s\n\n", grp))
     ranked <- df |>
       dplyr::mutate(direction = dplyr::case_when(
@@ -113,7 +107,7 @@ if (nrow(gsea_all) == 0) {
     cat(knitr::knit_print(dt))
     cat("\n\n")
   }
-  if (is_html_report() && length(nonempty_grps) > 0) {
+  if (is_html_report() && length(colls) > 0) {
     cat("\n\n:::\n\n")
   }
 }
