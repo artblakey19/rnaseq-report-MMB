@@ -144,11 +144,27 @@
     });
   }
 
+  function groupIntoToolbar() {
+    var lang = document.querySelector(".lang-toggle");
+    var pdf  = document.querySelector(".pdf-save-btn");
+    if (!lang && !pdf) return;
+    var host = document.querySelector("main.content")
+            || document.querySelector("main")
+            || document.getElementById("quarto-document-content")
+            || document.body;
+    var bar = document.createElement("div");
+    bar.className = "report-toolbar";
+    if (lang) bar.appendChild(lang);
+    if (pdf)  bar.appendChild(pdf);
+    host.insertBefore(bar, host.firstChild);
+  }
+
   ready(function () {
     setupLangToggle();
     setupTocToggle();
     setupTocCollapsibles();
     setupPdfButton();
+    groupIntoToolbar();
   });
 })();
 </script>

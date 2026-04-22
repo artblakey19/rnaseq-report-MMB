@@ -14,29 +14,24 @@
 #       -t bulk-rnaseq:latest --load .
 #
 # Run (bind-mount project at /project, pass snakemake args as CMD):
-#   docker run --rm \
-#       -u "$(id -u):$(id -g)" \
-#       -e HOME=/tmp \
-#       -v "$PWD":/project \
-#       bulk-rnaseq -c1
+#   docker run --rm -v "$PWD":/project bulk-rnaseq -c1
 #
-#   The -u/-e HOME flags are not optional:
-#     -u $(id -u):$(id -g)  → make outputs in .snakemake/ and results/ owned
-#                              by the host user (avoid root-owned files).
-#     -e HOME=/tmp          → conda/mamba need a writable HOME for cache;
-#                              the image's mambauser HOME is not writable when
-#                              the user is overridden.
+# The entrypoint (docker/entrypoint.sh) picks up the host UID/GID from
+# /project's ownership and switches to it via gosu, and sets HOME=/tmp so
+# conda/mamba have a writable cache. No `-u` or `-e HOME=/tmp` needed.
 
 FROM mambaorg/micromamba:latest
 
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 
-# System packages that Snakemake and conda env resolution expect.
+# System packages that Snakemake and conda env resolution expect,
+# plus gosu for runtime UID switching in the entrypoint.
 USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         git \
         ca-certificates \
+        gosu \
  && rm -rf /var/lib/apt/lists/*
 USER $MAMBA_USER
 
@@ -57,6 +52,15 @@ WORKDIR /app
 COPY --chown=$MAMBA_USER:$MAMBA_USER workflow ./workflow
 COPY --chown=$MAMBA_USER:$MAMBA_USER report   ./report
 
+# Install entrypoint + dispatch. entrypoint.sh runs as root (the final USER
+# below) so gosu can drop privileges to the host user derived from /project
+# ownership. bulk-rnaseq-entry.sh then branches on the first arg: `init` →
+# interactive config generator; anything else → snakemake pipeline.
+USER root
+COPY docker/entrypoint.sh          /usr/local/bin/entrypoint.sh
+COPY docker/bulk-rnaseq-entry.sh   /usr/local/bin/bulk-rnaseq-entry.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/bulk-rnaseq-entry.sh
+
 # Expected runtime layout (bind-mount your project root here):
 #   /project/config/{config.yaml, samples.tsv, contrasts.tsv}
 #   /project/<counts>.tsv           (path comes from config.yaml)
@@ -64,6 +68,5 @@ COPY --chown=$MAMBA_USER:$MAMBA_USER report   ./report
 #   /project/.snakemake/conda/      (created automatically; reused on rerun)
 WORKDIR /project
 
-ENTRYPOINT ["micromamba", "run", "-n", "base", \
-    "snakemake", "--snakefile", "/app/workflow/Snakefile", "--use-conda"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh", "/usr/local/bin/bulk-rnaseq-entry.sh"]
 CMD ["-c1"]

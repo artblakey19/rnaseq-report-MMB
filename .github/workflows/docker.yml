@@ -1,0 +1,94 @@
+name: Build and publish Docker images
+
+# Publishes both container images to GitHub Container Registry:
+#   ghcr.io/<owner>/bulk-rnaseq          (main pipeline)
+#   ghcr.io/<owner>/bulk-rnaseq-jupyter  (JupyterLab explorer)
+#
+# Triggers:
+#   - push to main          → :latest + :sha-<short>
+#   - tag push v*           → :<semver>, :<major.minor>
+#   - pull_request to main  → build-only (no push) for sanity check
+#   - workflow_dispatch     → manual rebuild from the Actions tab
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'Dockerfile'
+      - 'Dockerfile.jupyter'
+      - 'docker/**'
+      - 'workflow/**'
+      - 'report/**'
+      - '.github/workflows/docker.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'Dockerfile.jupyter'
+      - 'docker/**'
+      - 'workflow/**'
+      - 'report/**'
+      - '.github/workflows/docker.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: bulk-rnaseq
+            dockerfile: Dockerfile
+          - image: bulk-rnaseq-jupyter
+            dockerfile: Dockerfile.jupyter
+    steps:
+      - uses: actions/checkout@v4
+
+      # GHCR requires a lowercase owner segment. github.repository_owner keeps
+      # the original case; lowercase it defensively so org/user renames don't
+      # break the push.
+      - name: Lowercase repository owner
+        run: echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

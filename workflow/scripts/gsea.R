@@ -72,15 +72,15 @@ if (ranking == "stat") {
 # --- MSigDB Data Prep & GSEA ----------------------------------------------
 # Function to parse collection string and fetch pathways
 get_pathways <- function(coll_str) {
-  parts <- unlist(strsplit(coll_str, ":"))
-  cat <- parts[1]
+  parts   <- unlist(strsplit(coll_str, ":"))
+  coll    <- parts[1]
   if (length(parts) > 1) {
-    subcat <- paste(parts[-1], collapse = ":")
-    m <- msigdbr(species = "Homo sapiens", category = cat, subcategory = subcat)
+    subcoll <- paste(parts[-1], collapse = ":")
+    m <- msigdbr(species = "Homo sapiens", collection = coll, subcollection = subcoll)
   } else {
-    m <- msigdbr(species = "Homo sapiens", category = cat)
+    m <- msigdbr(species = "Homo sapiens", collection = coll)
   }
-  
+
   if (nrow(m) == 0) {
     warning("No MSigDB entries found for collection: ", coll_str)
     return(list())

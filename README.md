@@ -14,11 +14,11 @@ nf-core/rnaseq ─► salmon counts + multiqc_data
    │  MultiQC summary            (QC)                 │
    │  DESeq2 VST → PCA · corr    (exploratory)        │
    │  DESeq2 + apeglm            (differential)       │
-   │     ├─► fgsea (MSigDB)      (GSEA)               │
-   │     ├─► clusterProfiler     (ORA)                │
-   │     ├─► decoupleR + CollecTRI   (TF activity)    │
-   │     └─► L2S2 / LINCS L1000      (drug reposition)│
-   │  PROGENy                    (pathway activity)   │
+   │   ├─► fgsea (MSigDB)        (GSEA)               │
+   │   ├─► clusterProfiler       (ORA)                │
+   │   ├─► decoupleR + CollecTRI (TFEA)               │
+   │   └─► L2S2 / LINCS L1000    (cMap)               │
+   │  decoupleR + PROGENy        (pathway activity)   │
    │                                                  │
    └──────────────────────┬───────────────────────────┘
                           │
@@ -67,60 +67,50 @@ Self-contained image bundling Snakemake + conda/mamba. Per-rule R/Python envs
 are built on first run and cached under `.snakemake/conda/` on the mounted
 project directory.
 
+Run against the shipped fixture:
+
 ```bash
-# Build (linux/amd64; on Apple Silicon docker build also produces linux/arm64)
-docker build -t bulk-rnaseq:latest .
-
-# Run on the shipped fixture
 docker run --rm \
-    -u "$(id -u):$(id -g)" \
-    -e HOME=/tmp \
     -v "$PWD":/project \
-    bulk-rnaseq:latest \
+    ghcr.io/artblakey19/bulk-rnaseq:latest \
     --configfile tests/test_data/config_test.yaml -c1
+```
 
-# Run on your project (config.yaml + counts + multiqc_data on host)
-docker run --rm \
-    -u "$(id -u):$(id -g)" \
-    -e HOME=/tmp \
+**Place the counts TSV and `multiqc_data/` in the project directory, then use
+the `init` sub-command to generate `config/config.yaml`, `samples.tsv`,
+`contrasts.tsv` and run the pipeline.**
+
+```bash
+# Generate config (enter sample information at the prompts)
+docker run --rm -it \
     -v "$PWD":/project \
-    bulk-rnaseq:latest \
+    ghcr.io/artblakey19/bulk-rnaseq:latest init
+
+# Run the pipeline against the generated config
+docker run --rm \
+    -v "$PWD":/project \
+    ghcr.io/artblakey19/bulk-rnaseq:latest \
     --configfile config/config.yaml -c1
 ```
 
-`-u` and `-e HOME` are required:
-
-- `-u "$(id -u):$(id -g)"` writes outputs in `.snakemake/`, `results/`, `logs/`
-  as the host user; without it those files end up owned by root inside the
-  container.
-- `-e HOME=/tmp` gives conda/mamba a writable HOME for its cache; the image's
-  default `mambauser` HOME is not writable once the user is overridden.
-
 ---
 
-## Interactive exploration
+## Jupyter Notebook
 
-`Dockerfile.jupyter` builds a companion image with JupyterLab + an R kernel
-(IRkernel) pre-loaded with the same R stack the pipeline uses. The deliverable
-still comes from `bulk-rnaseq` (Snakemake → Quarto); this image is for plot
-iteration, custom figures, and ad-hoc queries against the pipeline outputs.
+JupyterLab + R kernel (IRkernel) + the same R stack the pipeline uses.
+
+Interactive code editing for plot generation and follow-up analyses.
 
 ```bash
-docker build -f Dockerfile.jupyter -t bulk-rnaseq-jupyter:latest .
-
 docker run --rm \
-    -u "$(id -u):$(id -g)" \
-    -e HOME=/tmp \
     -v "$PWD":/project \
     -p 8888:8888 \
-    bulk-rnaseq-jupyter:latest
+    ghcr.io/artblakey19/bulk-rnaseq-jupyter:latest
 ```
 
-Open the `http://127.0.0.1:8888/lab?token=…` URL printed on startup and launch
-`notebooks/explore.ipynb`. The template mirrors each report section — QC, PCA,
-volcano, enrichment, TF / pathway activity, drug repositioning — loading the
-corresponding `results/**/*.{csv,tsv,rds}` files so cutoffs, labels, and plot
-code can be edited without rerunning Snakemake.
+- Copy the `http://127.0.0.1:8888/lab?token=...` URL printed in the terminal into your browser.
+- Open `notebooks/explore.ipynb` to analyse.
+- Plot labels, cutoffs, and so on can be adjusted freely without rerunning the full Snakemake pipeline.
 
 ---
 
@@ -145,9 +135,9 @@ code can be edited without rerunning Snakemake.
 | **Differential expression**    | DESeq2 Wald test + apeglm LFC shrinkage.                        | DEG summary, volcano, MA, top-30 DEG heatmap, full results table.      |
 | **Gene-set enrichment (GSEA)** | Pre-ranked GSEA (ranking metric: Wald stat).                    | MSigDB H / C2:CP (Reactome, WikiPathways, PID, BioCarta) / C2:CGP / C6 |
 | **Over-representation (ORA)**  | `clusterProfiler::enricher()` + KEGG live REST.                 | Per-DB (GO BP, KEGG, Reactome, Hallmark) top-10 up / down              |
-| **TF activity**                | decoupler + ULM + CollecTRI                                     | Top-30 TFs + full score table                                          |
+| **TFEA**                | decoupler + ULM + CollecTRI                                     | Top-30 TFs + full score table                                          |
 | **Pathway activity**           | decoupler + PROGENy                                             | Per-sample z-scored heatmap + treated−control delta (Wilcoxon).        |
-| **Drug repositioning**         | L2S2 paired query on up / down DEG signatures.                  | Ranked perturbagens                                                    |
+| **cMAP**         | L2S2 paired query on up / down DEG signatures.                  | Ranked perturbagens                                                    |
 | **Audit trail**                | Config snapshot, MD5, session info                              | Reproducibility block                                                  |
 
 ---

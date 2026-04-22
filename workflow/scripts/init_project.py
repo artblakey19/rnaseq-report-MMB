@@ -8,13 +8,17 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import sys
 from pathlib import Path
 from textwrap import dedent
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+# PROJECT_ROOT env var lets the Docker wrapper point REPO_ROOT at the
+# bind-mounted /project instead of the baked-in /app, so relative counts
+# paths resolve against the host project dir.
+REPO_ROOT = Path(os.environ.get("PROJECT_ROOT") or Path(__file__).resolve().parents[2])
 DEFAULT_CONFIG = REPO_ROOT / "config" / "config.yaml"
 DEFAULT_SAMPLES = REPO_ROOT / "config" / "samples.tsv"
 DEFAULT_CONTRASTS = REPO_ROOT / "config" / "contrasts.tsv"

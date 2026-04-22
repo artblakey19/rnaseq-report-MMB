@@ -62,3 +62,11 @@ README.md
 README.ko.md
 PROPOSAL.md
 AGENTS.md
+
+# Not COPYed by either Dockerfile — keep context lean
+tests
+notebooks
+config
+.github
+Dockerfile
+Dockerfile.jupyter

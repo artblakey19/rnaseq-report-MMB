@@ -649,20 +649,25 @@ pre {
 }
 
 /* ================================================================
-   Language toggle (KR/EN) — floating top-right, left of PDF button
+   In-document toolbar — holds language toggle and PDF button at the top
+   of the main content, right-aligned, scrolls with the page.
    ================================================================ */
 
+.report-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1.25rem;
+}
+
 .lang-toggle {
-  position: absolute;
-  top: 1rem;
-  right: 5rem;
-  z-index: 3001;
   display: inline-flex;
   border: 1px solid var(--report-line);
   border-radius: 6px;
   overflow: hidden;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.08);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06);
 }
 
 .lang-toggle__btn {
@@ -701,14 +706,10 @@ body.lang-ko .lang-en {
 }
 
 /* ================================================================
-   PDF download button (floating, top-right)
+   PDF download button — lives in .report-toolbar alongside .lang-toggle
    ================================================================ */
 
 .pdf-save-btn {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  z-index: 3001;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -721,7 +722,7 @@ body.lang-ko .lang-en {
   font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.08);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
@@ -754,6 +755,8 @@ body.lang-ko .lang-en {
   .toc-control-rail,
   .toc-toggle,
   .pdf-save-btn,
+  .lang-toggle,
+  .report-toolbar,
   #quarto-sidebar-toc-left,
   #quarto-margin-sidebar,
   #quarto-sidebar,

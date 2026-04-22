@@ -14,11 +14,11 @@ nf-core/rnaseq ─► salmon counts + multiqc_data
    │  MultiQC summary            (QC)                 │
    │  DESeq2 VST → PCA · corr    (exploratory)        │
    │  DESeq2 + apeglm            (differential)       │
-   │     ├─► fgsea (MSigDB)      (GSEA)               │
-   │     ├─► clusterProfiler     (ORA)                │
-   │     ├─► decoupleR + CollecTRI   (TF activity)    │
-   │     └─► L2S2 / LINCS L1000      (drug reposition)│
-   │  PROGENy                    (pathway activity)   │
+   │   ├─► fgsea (MSigDB)        (GSEA)               │
+   │   ├─► clusterProfiler       (ORA)                │
+   │   ├─► decoupleR + CollecTRI (TFEA)               │
+   │   └─► L2S2 / LINCS L1000    (cMap)               │
+   │  decoupleR + PROGENy        (pathway activity)   │
    │                                                  │
    └──────────────────────┬───────────────────────────┘
                           │
@@ -63,62 +63,49 @@ HTML Report는 `results/report/report.html`에 생성됨.
 
 ## Docker
 
-Snakemake + conda/mamba가 포함된 독립 이미지. per-rule R/Python env는 첫 실행 시
-`.snakemake/conda/`에 빌드되어 호스트에 캐시됩니다.
+내장된 test fixture로 실행:
 
 ```bash
-# 빌드 (linux/amd64; Apple Silicon에서는 자동으로 linux/arm64 빌드)
-docker build -t bulk-rnaseq:latest .
-
-# Fixture 실행
 docker run --rm \
-    -u "$(id -u):$(id -g)" \
-    -e HOME=/tmp \
     -v "$PWD":/project \
-    bulk-rnaseq:latest \
+    ghcr.io/artblakey19/bulk-rnaseq:latest \
     --configfile tests/test_data/config_test.yaml -c1
+```
 
-# 실제 프로젝트 실행 (호스트에 config.yaml + counts + multiqc_data 준비)
-docker run --rm \
-    -u "$(id -u):$(id -g)" \
-    -e HOME=/tmp \
+**프로젝트 디렉터리에 counts TSV와 `multiqc_data/`를 둔 뒤,
+`init` 서브커맨드로 `config/config.yaml`, `samples.tsv`, `contrasts.tsv`를
+생성하고 파이프라인 실행.**
+
+```bash
+# config 생성 (샘플 정보 입력)
+docker run --rm -it \
     -v "$PWD":/project \
-    bulk-rnaseq:latest \
+    ghcr.io/artblakey19/bulk-rnaseq:latest init
+
+# 생성된 config로 파이프라인 실행
+docker run --rm \
+    -v "$PWD":/project \
+    ghcr.io/artblakey19/bulk-rnaseq:latest \
     --configfile config/config.yaml -c1
 ```
 
-`-u`와 `-e HOME`은 필수:
-
-- `-u "$(id -u):$(id -g)"` — `.snakemake/`, `results/`, `logs/` 산출물이 호스트 사용자
-  소유로 작성되도록 강제. 누락 시 컨테이너 내부 root 소유 파일이 호스트에 남음.
-- `-e HOME=/tmp` — conda/mamba가 캐시를 쓸 writable HOME 필요. 이미지 기본
-  `mambauser` HOME은 사용자 오버라이드 시 쓰기 권한 없음.
-
 ---
 
-## 인터랙티브 탐색
+## Jupyter Notebook
 
-`Dockerfile.jupyter`는 JupyterLab + R kernel(IRkernel) + 파이프라인과 동일한
-R 스택을 얹은 컨테이너를 빌드합니다. 최종 리포트는 여전히 `bulk-rnaseq`
-(Snakemake → Quarto)가 생성하고, 이 이미지는 플롯 수정·추가 그림·임시 질의 등
-파이프라인 산출물에 대한 탐색 전용입니다.
+JupyterLab + R kernel(IRkernel) + 파이프라인과 동일한 R 스택.
 
+Interactive하게 코드를 수정할 수 있고 plot 생성, 추가 분석에 활용가능.
 ```bash
-docker build -f Dockerfile.jupyter -t bulk-rnaseq-jupyter:latest .
-
 docker run --rm \
-    -u "$(id -u):$(id -g)" \
-    -e HOME=/tmp \
     -v "$PWD":/project \
     -p 8888:8888 \
-    bulk-rnaseq-jupyter:latest
+    ghcr.io/artblakey19/bulk-rnaseq-jupyter:latest
 ```
 
-시작 시 출력되는 `http://127.0.0.1:8888/lab?token=…` URL을 열고
-`notebooks/explore.ipynb`를 실행. 템플릿은 리포트 각 섹션 — QC, PCA, volcano,
-enrichment, TF / pathway activity, drug repositioning — 을 그대로 미러링하며
-대응되는 `results/**/*.{csv,tsv,rds}` 파일을 읽어 cutoff·라벨·플롯 코드를
-Snakemake 재실행 없이 수정 가능.
+- 컨테이너 실행 후 터미널에 출력되는 `http://127.0.0.1:8888/lab?token=...` 형태의 URL을 복사하여 브라우저에 붙여넣기
+- `notebooks/explore.ipynb` 파일을 열어서 분석
+- Snakemake 전체 파이프라인을 재실행할 필요 없이 plot label, cutoff 등을 자유롭게 조정 가능
 
 ---
 
@@ -143,9 +130,9 @@ Snakemake 재실행 없이 수정 가능.
 | **차등발현**                   | DESeq2 Wald test + apeglm LFC shrinkage.                   | DEG 요약, volcano, MA, top-30 DEG heatmap, 전체 결과.                 |
 | **Gene-set enrichment (GSEA)** | pre-ranked GSEA (ranking matric: Wald stat).               | MSigDB H / C2:CP (Reactome, WikiPathways, PID, BioCarta) / C2:CGP / C6 |
 | **Over-representation (ORA)**  | `clusterProfiler::enricher()` + KEGG live REST.          | DB(GOBP, KEGG, Reactome, Hallmark)별 top-10 up/down                    |
-| **TF 활성도**                  | decoupler + ULM + CollecTRI                               | Top-30 TF + 전체 score                                                 |
+| **TFEA**                  | decoupler + ULM + CollecTRI                               | Top-30 TF + 전체 score                                                 |
 | **Pathway 활성도**             | decoupler + PROGENy                                        | z-scored heatmap by sample + treated−control delta (Wilcoxon).        |
-| **Drug repositioning**         | Up/down DEG signature로 L2S2 paired query.                 | Ranked perturbagen                                                     |
+| **cMap**         | Up/down DEG signature로 L2S2 paired query.                 | Ranked perturbagen                                                     |
 | **Audit trail**                | Config snapshot, MD5, session info                        | 재현성 정보                                                            |
 
 ---
@@ -166,10 +153,10 @@ Bulk-RNAseq/
 │   │   ├── enrichment.smk
 │   │   └── report.smk
 │   ├── envs/                    # 단계별 conda env yaml
-│   └── scripts/                 # R / Python 구현
+│   └── scripts/                 # R / python scripts
 ├── report/
-│   ├── template.qmd             # 파라미터화된 Quarto 리포트
-│   ├── sections/                # 단계별 partial
+│   ├── template.qmd             # Quarto 리포트 템플릿
+│   ├── sections/                # 각 분석 단계별 코드
 │   └── assets/                  # CSS, JS
 ├── tests/
 │   └── test_data/               # 6샘플 × 10유전자 fixture
