@@ -1,7 +1,7 @@
 # Functional enrichment
 
 ::: {.lang-en}
-Per-contrast GSEA, ORA, TF activity (CollecTRI / ULM), and PROGENy pathway activity.
+Per-contrast GSEA, ORA, TFEA (CollecTRI / ULM), and PROGENy pathway activity.
 :::
 
 ::: {.lang-ko}
@@ -313,13 +313,13 @@ if (is.null(ora) || nrow(ora) == 0) {
 }
 ```
 
-### TF activity (CollecTRI, ULM)
+### TFEA (CollecTRI, ULM)
 
 ```{r enr-tf-activity, results='asis', fig.width=8, fig.height=9}
 tf_path <- file.path(project_root, "results", "tf_activity", cid, "tf_scores.tsv")
 tf <- safe_read(tf_path, sep = "\t")
 if (is.null(tf) || nrow(tf) == 0) {
-  cat(as.character(no_results("TF activity output is empty (network fetch may have failed).")))
+  cat(as.character(no_results("TFEA output is empty (network fetch may have failed).")))
 } else {
   tf_top <- tf |>
     dplyr::mutate(abs_s = abs(score)) |>

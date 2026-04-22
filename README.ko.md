@@ -98,7 +98,7 @@ docker run --rm \
 
 | 파일                     | 용도                                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `config/config.yaml`   | 전역 설정: 경로, DE·enrichment cutoff, TF/pathway 도구, drug repositioning 서비스.                                 |
+| `config/config.yaml`   | 전역 설정: 경로, DE·enrichment cutoff, TF/pathway 도구, cMap 서비스.                                                |
 | `config/samples.tsv`   | 컬럼:`sample, condition, replicate, batch`.                                                                       |
 | `config/contrasts.tsv` | 컬럼:`contrast_id, factor, numerator, denominator, description`.                                                  |
 | `<counts>.tsv`         | nf-core/rnaseq의 `salmon.merged.gene_counts_length_scaled.tsv` (1열=`gene_id` Ensembl, 2열=`gene_name` HGNC). |
@@ -176,7 +176,7 @@ Bulk-RNAseq/
 - **CollecTRI** — Müller-Dott S. et al. *Expanding the coverage of regulons from high-confidence prior knowledge for accurate estimation of transcription factor activities.* Nucleic Acids Research gkad841 (2023). https://doi.org/10.1093/nar/gkad841
 - **PROGENy** — Schubert M. et al. *Perturbation-response genes reveal signaling footprints in cancer gene expression.* Nat Commun 9, 20 (2018). https://doi.org/10.1038/s41467-017-02391-6
 
-### Drug repositioning / connectivity
+### cMap / connectivity
 
 - **L1000 Connectivity Map** — Subramanian A. et al. *A next generation Connectivity Map: L1000 platform and the first 1,000,000 profiles.* Cell 171(6), 1437–1452 (2017). https://doi.org/10.1016/j.cell.2017.10.049
 - **L2S2** — L1000 signature 검색 (Ma'ayan Lab). https://l2s2.maayanlab.cloud

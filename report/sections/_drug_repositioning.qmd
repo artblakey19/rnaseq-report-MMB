@@ -1,4 +1,4 @@
-# Drug repositioning / connectivity
+# cMap / connectivity
 
 ::: {.lang-en}
 Up/down DEG signatures queried against L2S2. Rows are perturbagens ranked by adjusted *p*-value; `score` is the odds ratio.
