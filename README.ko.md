@@ -1,4 +1,4 @@
-# Bulk RNA-seq 분석 리포트 Workflow
+# Bulk RNA-seq Analyzer Workflow
 
 [![Smoke test](https://github.com/artblakey19/rnaseq-report-MMB/actions/workflows/test.yml/badge.svg)](https://github.com/artblakey19/rnaseq-report-MMB/actions/workflows/test.yml)
 [![Docker](https://github.com/artblakey19/rnaseq-report-MMB/actions/workflows/docker.yml/badge.svg)](https://github.com/artblakey19/rnaseq-report-MMB/actions/workflows/docker.yml)
