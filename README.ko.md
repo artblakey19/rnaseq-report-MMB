@@ -22,7 +22,7 @@
 nf-core/rnaseq 분석 결과물 두 개가 필요:
 
 - `salmon.merged.gene_counts_length_scaled.tsv` — count 행렬
-- `multiqc_data/` — MultiQC raw data 디렉터리 (`multiqc_report.html`이 **아님**)
+- `multiqc_report_data/` (nf-core/rnaseq) 또는 `multiqc_data/` (일반 MultiQC)
 
 ### Colab에서 실행
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/artblakey19/BulkRNAseq-Analyzer/blob/main/notebooks/colab_pipeline.ko.ipynb)
@@ -85,18 +85,6 @@ Jupyter 사용 시: 컨테이너 실행 후 터미널에 출력되는 `http://12
 
 ---
 
-## 입력 파일
-
-| 파일                     | 용도                                                                                                                |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `config/config.yaml`   | 전역 설정: 경로, DE·enrichment cutoff, TF/pathway 도구, cMap 서비스.                                                |
-| `config/samples.tsv`   | 컬럼:`sample, condition, replicate, batch`.                                                                       |
-| `config/contrasts.tsv` | 컬럼:`contrast_id, factor, numerator, denominator, description`.                                                  |
-| `<counts>.tsv`         | nf-core/rnaseq의 `salmon.merged.gene_counts_length_scaled.tsv` (1열=`gene_id` Ensembl, 2열=`gene_name` HGNC). |
-| `multiqc_data/`        | nf-core/rnaseq MultiQC 출력 디렉토리.                                                                               |
-
----
-
 ## 리포트 섹션
 
 | 단계                                 | 방법                                                       | 주 산출물                                                              |
@@ -116,27 +104,26 @@ Jupyter 사용 시: 컨테이너 실행 후 터미널에 출력되는 `http://12
 ## 저장소 구조
 
 ```
-Bulk-RNAseq/
+BulkRNAseq-Analyzer/
 ├── config/
 │   ├── config.yaml              # 전역 설정
 │   ├── samples.tsv              # 샘플 메타데이터
 │   └── contrasts.tsv            # DE 비교 정의
 ├── workflow/
-│   ├── Snakefile                # 파이프라인 진입점
-│   ├── rules/
-│   │   ├── qc.smk
-│   │   ├── de.smk
-│   │   ├── enrichment.smk
-│   │   └── report.smk
+│   ├── Snakefile
+│   ├── rules/                   # qc.smk, de.smk, enrichment.smk, report.smk
 │   ├── envs/                    # 단계별 conda env yaml
-│   └── scripts/                 # R / python scripts
+│   └── scripts/                 # R / Python 구현
 ├── report/
-│   ├── template.qmd             # Quarto 리포트 템플릿
-│   ├── sections/                # 각 분석 단계별 코드
-│   └── assets/                  # CSS, JS
-├── results/                     # 파이프라인 출력
-├── README.md
-└── README.ko.md
+│   ├── template.qmd             # Quarto 리포트 진입점
+│   └── sections/                # 분석 단계별 partial
+├── notebooks/
+│   ├── explore.ipynb            # 로컬 JupyterLab
+│   └── colab_pipeline.ipynb     # Google Colab
+├── docker/                      # entrypoint + 서브커맨드 디스패치
+├── Dockerfile
+├── docs/rulegraph.svg
+└── results/                     # 파이프라인 출력 (gitignored)
 ```
 
 ---

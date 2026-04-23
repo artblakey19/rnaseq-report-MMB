@@ -22,7 +22,7 @@ Snakemake pipeline that takes salmon gene-count output from **nf-core/rnaseq** a
 You need two outputs from a prior nf-core/rnaseq run:
 
 - `salmon.merged.gene_counts_length_scaled.tsv` — counts matrix
-- `multiqc_data/` — MultiQC raw data directory (**not** `multiqc_report.html`)
+- `multiqc_report_data/` (nf-core/rnaseq) or `multiqc_data/` (stock MultiQC)
 
 ### Run in Colab
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/artblakey19/BulkRNAseq-Analyzer/blob/main/notebooks/colab_pipeline.ipynb)
@@ -84,18 +84,6 @@ For Jupyter: paste the `http://127.0.0.1:8888/lab?token=...` URL printed in the 
 
 ---
 
-## Inputs
-
-| File                     | Purpose                                                                                                             |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `config/config.yaml`     | Global settings: paths, DE / enrichment cutoffs, TF / pathway tools, cMap service.                                  |
-| `config/samples.tsv`     | Columns: `sample, condition, replicate, batch`.                                                                     |
-| `config/contrasts.tsv`   | Columns: `contrast_id, factor, numerator, denominator, description`.                                                |
-| `<counts>.tsv`           | nf-core/rnaseq `salmon.merged.gene_counts_length_scaled.tsv` (col 1 = `gene_id` Ensembl, col 2 = `gene_name` HGNC). |
-| `multiqc_data/`          | nf-core/rnaseq MultiQC output directory.                                                                            |
-
----
-
 ## Report sections
 
 | Stage                          | Method                                                          | Primary deliverable                                                    |
@@ -115,27 +103,26 @@ For Jupyter: paste the `http://127.0.0.1:8888/lab?token=...` URL printed in the 
 ## Repository layout
 
 ```
-Bulk-RNAseq/
+BulkRNAseq-Analyzer/
 ├── config/
 │   ├── config.yaml              # global settings
 │   ├── samples.tsv              # sample metadata
 │   └── contrasts.tsv            # DE comparison definitions
 ├── workflow/
-│   ├── Snakefile                # pipeline entry
-│   ├── rules/
-│   │   ├── qc.smk
-│   │   ├── de.smk
-│   │   ├── enrichment.smk
-│   │   └── report.smk
+│   ├── Snakefile
+│   ├── rules/                   # qc.smk, de.smk, enrichment.smk, report.smk
 │   ├── envs/                    # per-rule conda env yamls
 │   └── scripts/                 # R / Python implementations
 ├── report/
-│   ├── template.qmd             # parameterised Quarto report
-│   ├── sections/                # per-stage partials
-│   └── assets/                  # CSS, JS
-├── results/                     # pipeline output
-├── README.md
-└── README.ko.md
+│   ├── template.qmd             # Quarto report entry
+│   └── sections/                # per-stage partials
+├── notebooks/
+│   ├── explore.ipynb            # local JupyterLab
+│   └── colab_pipeline.ipynb     # Google Colab
+├── docker/                      # entrypoint + sub-command dispatch
+├── Dockerfile
+├── docs/rulegraph.svg
+└── results/                     # pipeline output (gitignored)
 ```
 
 ---

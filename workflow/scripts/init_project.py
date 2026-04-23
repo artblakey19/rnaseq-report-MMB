@@ -29,17 +29,16 @@ CONFIG_TEMPLATE = SCRIPT_ROOT / "config" / "config.template.yaml"
 
 
 def prompt(message: str, default: str | None = None) -> str:
-    # Treat "" and None identically — the template ships "" as a placeholder
-    # for "no default yet", and accepting it would return empty paths that
-    # silently collapse to cwd.
-    effective_default = default if default else None
-    suffix = f" [{effective_default}]" if effective_default is not None else ""
+    # `default=""` is a legitimate "skip this optional field" signal (e.g.
+    # Notes). Callers that ship `""` as a placeholder for "no default yet"
+    # should strip it to None before calling.
+    suffix = f" [{default}]" if default else ""
     while True:
         answer = input(f"{message}{suffix}: ").strip()
         if answer:
             return answer
-        if effective_default is not None:
-            return effective_default
+        if default is not None:
+            return default
         print("  (required)")
 
 
@@ -79,10 +78,17 @@ def suggest_counts(root: Path) -> list[Path]:
 
 
 def suggest_multiqc(root: Path) -> list[Path]:
+    # qc.R only needs a directory containing multiqc_general_stats.{txt,tsv}
+    # (or general_stats.{tsv,txt}). MultiQC / nf-core output the parent dir
+    # under various names — "multiqc_data", "multiqc_report_data",
+    # "<prefix>_multiqc_data" — so match by the presence of the stats file
+    # rather than the directory name.
+    needles = {"multiqc_general_stats.txt", "multiqc_general_stats.tsv",
+               "general_stats.tsv", "general_stats.txt"}
     hits: list[Path] = []
-    for dirpath, dirnames, _ in _walk_limited(root):
-        if "multiqc_data" in dirnames:
-            hits.append(dirpath / "multiqc_data")
+    for dirpath, _, filenames in _walk_limited(root):
+        if any(f in needles for f in filenames):
+            hits.append(dirpath)
     return hits
 
 
@@ -155,13 +161,13 @@ def collect_input_paths(existing: dict) -> dict:
         "Path to salmon.merged.gene_counts_length_scaled.tsv",
         REPO_ROOT,
         suggest_counts(REPO_ROOT),
-        default=inp.get("counts_tsv"),
+        default=inp.get("counts_tsv") or None,
     )
     inp["multiqc_data_dir"] = prompt_path(
-        "Path to multiqc_data/ directory",
+        "Path to multiqc_report_data/ (nf-core) or multiqc_data/ (stock MultiQC)",
         REPO_ROOT,
         suggest_multiqc(REPO_ROOT),
-        default=inp.get("multiqc_data_dir"),
+        default=inp.get("multiqc_data_dir") or None,
     )
     inp["samples_tsv"] = inp.get("samples_tsv", "config/samples.tsv")
     inp["contrasts_tsv"] = inp.get("contrasts_tsv", "config/contrasts.tsv")

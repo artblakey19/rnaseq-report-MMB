@@ -18,8 +18,10 @@ if (is.null(qc) || nrow(qc) == 0) {
   no_results("QC summary table not available.")
 } else {
   qc_show <- qc
-  for (col in intersect(c("mapping_rate", "rrna_pct", "duplication"),
-                        names(qc_show))) {
+  numeric_cols <- c("mapping_rate", "uniquely_mapped_pct",
+                    "rrna_pct", "duplication", "dupradar_slope",
+                    "exonic_pct", "strand_sense_pct", "strand_antisense_pct")
+  for (col in intersect(numeric_cols, names(qc_show))) {
     if (is.numeric(qc_show[[col]])) {
       qc_show[[col]] <- signif(qc_show[[col]], 3)
     }
@@ -55,16 +57,20 @@ if (is.null(qc) || nrow(qc) == 0 || !"assigned_reads" %in% names(qc)) {
 }
 ```
 
-## Mapping and duplication rates
+## Mapping, contamination, complexity
 
-```{r qc-rates, fig.width=7, fig.height=3.5}
+```{r qc-rates, fig.width=8, fig.height=5}
 if (is.null(qc) || nrow(qc) == 0) {
-  no_results("Mapping / duplication metrics not available.")
+  no_results("QC rate metrics not available.")
 } else {
-  rate_cols <- intersect(c("mapping_rate", "rrna_pct", "duplication"), names(qc))
+  rate_cols <- intersect(
+    c("mapping_rate", "uniquely_mapped_pct", "rrna_pct",
+      "duplication", "dupradar_slope", "exonic_pct"),
+    names(qc)
+  )
   rate_cols <- rate_cols[vapply(rate_cols, function(c) any(!is.na(qc[[c]])), logical(1))]
   if (length(rate_cols) == 0) {
-    no_results("All rate metrics (mapping_rate / rrna_pct / duplication) are NA.")
+    no_results("All rate metrics are NA.")
   } else {
     df <- qc |>
       dplyr::select(sample, condition, dplyr::all_of(rate_cols)) |>
@@ -79,5 +85,20 @@ if (is.null(qc) || nrow(qc) == 0) {
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
     print(p)
   }
+}
+```
+
+## Strandedness
+
+```{r qc-strand}
+if (is.null(qc) || nrow(qc) == 0 || !"strandedness" %in% names(qc) ||
+    all(is.na(qc$strandedness))) {
+  no_results("Strandedness not available (RSeQC infer_experiment not in MultiQC output).")
+} else {
+  strand_tbl <- qc |>
+    dplyr::select(sample, strandedness,
+                  dplyr::any_of(c("strand_sense_pct", "strand_antisense_pct")))
+  knitr::kable(strand_tbl, row.names = FALSE, booktabs = TRUE,
+               caption = "Inferred library strandedness per sample")
 }
 ```

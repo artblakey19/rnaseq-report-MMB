@@ -8,7 +8,10 @@ project:
     duration: ''
     notes: ''
 input:
+  # counts_tsv: nf-core/rnaseq → salmon.merged.gene_counts_length_scaled.tsv
+  #   Header columns 1-2 = gene_id (Ensembl), gene_name (HGNC); cols 3+ = samples.
   counts_tsv: ''
+  # multiqc_data_dir: multiqc_report_data/ (nf-core) or multiqc_data/ (stock).
   multiqc_data_dir: resources/nfcore_output/multiqc/multiqc_data
   samples_tsv: config/samples.tsv
   contrasts_tsv: config/contrasts.tsv
