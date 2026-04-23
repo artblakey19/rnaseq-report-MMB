@@ -29,14 +29,79 @@ CONFIG_TEMPLATE = SCRIPT_ROOT / "config" / "config.template.yaml"
 
 
 def prompt(message: str, default: str | None = None) -> str:
-    suffix = f" [{default}]" if default is not None else ""
+    # Treat "" and None identically — the template ships "" as a placeholder
+    # for "no default yet", and accepting it would return empty paths that
+    # silently collapse to cwd.
+    effective_default = default if default else None
+    suffix = f" [{effective_default}]" if effective_default is not None else ""
     while True:
         answer = input(f"{message}{suffix}: ").strip()
         if answer:
             return answer
-        if default is not None:
-            return default
+        if effective_default is not None:
+            return effective_default
         print("  (required)")
+
+
+# Directories not worth scanning when auto-detecting inputs — pipeline
+# outputs, envs, VCS, editor caches. Kept small on purpose; if a user's
+# counts file happens to live under one of these, they can still type the
+# path manually.
+_SCAN_SKIP_DIRS = {".snakemake", ".git", ".github", "results", "work", ".venv",
+                   "node_modules", "__pycache__", ".cache", ".ipynb_checkpoints"}
+
+
+def _walk_limited(root: Path, max_depth: int = 4):
+    import os as _os
+    root_resolved = root.resolve()
+    for dirpath, dirnames, filenames in _os.walk(root_resolved):
+        rel = Path(dirpath).relative_to(root_resolved)
+        depth = 0 if rel == Path(".") else len(rel.parts)
+        if depth >= max_depth:
+            dirnames[:] = []
+            continue
+        dirnames[:] = [d for d in dirnames
+                       if d not in _SCAN_SKIP_DIRS and not d.startswith(".")]
+        yield Path(dirpath), dirnames, filenames
+
+
+def suggest_counts(root: Path) -> list[Path]:
+    nfcore_name = "salmon.merged.gene_counts_length_scaled.tsv"
+    primary: list[Path] = []
+    fallback: list[Path] = []
+    for dirpath, _, filenames in _walk_limited(root):
+        for fn in filenames:
+            if fn == nfcore_name:
+                primary.append(dirpath / fn)
+            elif "gene_counts" in fn and fn.endswith(".tsv"):
+                fallback.append(dirpath / fn)
+    return primary + fallback
+
+
+def suggest_multiqc(root: Path) -> list[Path]:
+    hits: list[Path] = []
+    for dirpath, dirnames, _ in _walk_limited(root):
+        if "multiqc_data" in dirnames:
+            hits.append(dirpath / "multiqc_data")
+    return hits
+
+
+def prompt_path(message: str, root: Path, suggestions: list[Path],
+                default: str | None = None) -> str:
+    rels = [str(p.relative_to(root.resolve())) for p in suggestions]
+    if not rels:
+        return prompt(message, default=default)
+    print(f"  Detected under {root}:")
+    for i, r in enumerate(rels, 1):
+        print(f"    [{i}] {r}")
+    print("    (enter the number, or type a custom path)")
+    # Prefer the existing config value if it's still valid; otherwise the
+    # first auto-detected candidate.
+    effective_default = default if default else rels[0]
+    answer = prompt(message, default=effective_default)
+    if answer.isdigit() and 1 <= int(answer) <= len(rels):
+        return rels[int(answer) - 1]
+    return answer
 
 
 def prompt_choice(message: str, choices: list[str], default: str | None = None) -> str:
@@ -86,12 +151,16 @@ def collect_project_meta(existing: dict) -> dict:
 def collect_input_paths(existing: dict) -> dict:
     inp = existing.get("input", {})
     print("\n=== Input paths ===")
-    inp["counts_tsv"] = prompt(
+    inp["counts_tsv"] = prompt_path(
         "Path to salmon.merged.gene_counts_length_scaled.tsv",
+        REPO_ROOT,
+        suggest_counts(REPO_ROOT),
         default=inp.get("counts_tsv"),
     )
-    inp["multiqc_data_dir"] = prompt(
+    inp["multiqc_data_dir"] = prompt_path(
         "Path to multiqc_data/ directory",
+        REPO_ROOT,
+        suggest_multiqc(REPO_ROOT),
         default=inp.get("multiqc_data_dir"),
     )
     inp["samples_tsv"] = inp.get("samples_tsv", "config/samples.tsv")
