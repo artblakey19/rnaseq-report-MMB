@@ -289,6 +289,7 @@ def main() -> int:
         print("aborted.")
         return 1
 
+    args.config.parent.mkdir(parents=True, exist_ok=True)
     with args.config.open("w") as f:
         yaml.safe_dump(existing, f, sort_keys=False, default_flow_style=False)
     write_tsv(args.samples, sample_rows, ["sample", "condition", "replicate", "batch"])

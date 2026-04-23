@@ -353,10 +353,23 @@ file_meta <- function(label, path) {
   )
 }
 
+# Canonical pipeline version lives in the `VERSION` file at the workflow
+# source root. The path is resolved relative to this template so it works
+# regardless of project_root: inside Docker the template sits at /app/report/
+# and the VERSION file at /app/VERSION; in Colab/native clones the same
+# relative layout holds.
+.tpl_dir <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                     error = function(e) NULL)
+.version_path <- if (!is.null(.tpl_dir)) file.path(.tpl_dir, "..", "VERSION") else NULL
+pipeline_version <- if (!is.null(.version_path) && file.exists(.version_path)) {
+  trimws(readLines(.version_path, n = 1, warn = FALSE))
+} else "unknown"
+
 run_meta <- data.frame(
-  item = c("Report render time", "Project root", "Config used by report"),
+  item = c("Report render time", "Pipeline version", "Project root", "Config used by report"),
   value = c(
     format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
+    pipeline_version,
     project_root,
     config_path
   ),
@@ -366,7 +379,7 @@ run_meta <- data.frame(
 report_table(
   run_meta,
   rownames = FALSE,
-  options = list(pageLength = 3, dom = "t", scrollX = TRUE)
+  options = list(pageLength = 4, dom = "t", scrollX = TRUE)
 )
 
 input_meta <- dplyr::bind_rows(

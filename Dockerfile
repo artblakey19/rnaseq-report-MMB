@@ -80,6 +80,7 @@ RUN micromamba install -y -n base -c conda-forge -c bioconda \
 # side too (mounted as /project/notebooks/) so users can edit without a
 # rebuild.
 WORKDIR /app
+COPY --chown=$MAMBA_USER:$MAMBA_USER VERSION ./VERSION
 COPY --chown=$MAMBA_USER:$MAMBA_USER workflow ./workflow
 COPY --chown=$MAMBA_USER:$MAMBA_USER report   ./report
 COPY --chown=$MAMBA_USER:$MAMBA_USER config/config.template.yaml ./config/config.template.yaml

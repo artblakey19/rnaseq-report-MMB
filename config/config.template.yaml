@@ -9,7 +9,7 @@ project:
     notes: ''
 input:
   counts_tsv: ''
-  multiqc_data_dir: resources/nfcore_output/multiqc/multiqc_report_data
+  multiqc_data_dir: ''
   samples_tsv: config/samples.tsv
   contrasts_tsv: config/contrasts.tsv
 de:
