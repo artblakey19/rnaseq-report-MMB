@@ -22,7 +22,7 @@ Snakemake pipeline that takes salmon gene-count output from **nf-core/rnaseq** a
 You need two outputs from a prior nf-core/rnaseq run:
 
 - `salmon.merged.gene_counts_length_scaled.tsv` — counts matrix
-- `multiqc_report_data/` (nf-core/rnaseq) or `multiqc_data/` (stock MultiQC)
+- `multiqc_report_data/` — MultiQC data directory from the same nf-core run
 
 ### Run in Colab
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/artblakey19/BulkRNAseq-Analyzer/blob/main/notebooks/colab_pipeline.ipynb)
@@ -59,7 +59,7 @@ HTML report is written to `results/report/report.html`.
 
 ### Run locally (Docker)
 
-Place the counts TSV and `multiqc_data/` in the directory that will be bind-mounted as the Docker volume. The same image serves three sub-commands: `init` generates config, the default command runs the pipeline, `jupyter` launches JupyterLab.
+Place the counts TSV and `multiqc_report_data/` in the directory that will be bind-mounted as the Docker volume. The same image serves three sub-commands: `init` generates config, the default command runs the pipeline, `jupyter` launches JupyterLab.
 
 ```bash
 # 1. Generate config (enter sample information at the prompts)

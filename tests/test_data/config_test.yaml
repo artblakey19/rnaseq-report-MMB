@@ -10,7 +10,7 @@ project:
 
 input:
   counts_tsv: "tests/test_data/counts.tsv"
-  multiqc_data_dir: "tests/test_data/multiqc_data"
+  multiqc_data_dir: "tests/test_data/multiqc_report_data"
   samples_tsv: "tests/test_data/samples.tsv"
   contrasts_tsv: "tests/test_data/contrasts.tsv"
 

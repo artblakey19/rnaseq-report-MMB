@@ -86,24 +86,6 @@ pick_metric <- function(df, aliases) {
   rep(NA_real_, nrow(df))
 }
 
-load_multiqc_general_stats <- function(dir) {
-  if (is.null(dir) || !nzchar(dir) || !dir.exists(dir)) return(NULL)
-  candidates <- c(
-    file.path(dir, "multiqc_general_stats.txt"),
-    file.path(dir, "multiqc_general_stats.tsv"),
-    file.path(dir, "general_stats.tsv"),
-    file.path(dir, "general_stats.txt")
-  )
-  found <- candidates[file.exists(candidates)]
-  if (length(found) == 0) return(NULL)
-  df <- read_tsv(found[1], show_col_types = FALSE)
-  if (ncol(df) < 2) return(NULL)
-  names(df)[1] <- "sample"
-  df$sample <- as.character(df$sample)
-  df
-}
-
-# Read a per-tool MultiQC TSV (samples-in-col-1). Returns NULL if absent.
 load_mqc_module <- function(dir, basename) {
   if (is.null(dir) || !nzchar(dir) || !dir.exists(dir)) return(NULL)
   path <- file.path(dir, basename)
@@ -113,6 +95,20 @@ load_mqc_module <- function(dir, basename) {
   names(df)[1] <- "sample"
   df$sample <- as.character(df$sample)
   df
+}
+
+load_multiqc_general_stats <- function(dir) {
+  for (bn in c("multiqc_general_stats.txt", "multiqc_general_stats.tsv")) {
+    df <- load_mqc_module(dir, bn)
+    if (!is.null(df)) return(df)
+  }
+  NULL
+}
+
+numeric_col <- function(df, pattern) {
+  hit <- grep(paste0("^", pattern, "$"), names(df), ignore.case = TRUE, value = TRUE)
+  if (length(hit) == 0) return(rep(NA_real_, nrow(df)))
+  suppressWarnings(as.numeric(df[[hit[1]]]))
 }
 
 # Strandedness from RSeQC infer_experiment. MultiQC emits per-orientation
@@ -158,14 +154,9 @@ parse_infer_experiment <- function(dir) {
 parse_read_distribution <- function(dir) {
   df <- load_mqc_module(dir, "multiqc_rseqc_read_distribution.txt")
   if (is.null(df)) return(NULL)
-  pct_col <- function(name) {
-    hit <- grep(paste0("^", name, "$"), names(df), ignore.case = TRUE, value = TRUE)
-    if (length(hit) == 0) return(rep(NA_real_, nrow(df)))
-    suppressWarnings(as.numeric(df[[hit[1]]]))
-  }
-  cds  <- pct_col("cds_exons_tag_pct")
-  utr5 <- pct_col("5_utr_exons_tag_pct")
-  utr3 <- pct_col("3_utr_exons_tag_pct")
+  cds  <- numeric_col(df, "cds_exons_tag_pct")
+  utr5 <- numeric_col(df, "5_utr_exons_tag_pct")
+  utr3 <- numeric_col(df, "3_utr_exons_tag_pct")
   exonic <- rowSums(cbind(cds, utr5, utr3), na.rm = TRUE)
   exonic[is.na(cds) & is.na(utr5) & is.na(utr3)] <- NA_real_
   tibble(sample = df$sample, exonic_pct = exonic)
@@ -209,23 +200,20 @@ if (!is.null(mqc)) {
 }
 
 # Per-tool MultiQC modules (optional — absence does not fail the rule).
-strand_tbl   <- parse_infer_experiment(multiqc_dir)
-readdist_tbl <- parse_read_distribution(multiqc_dir)
-dupradar_tbl <- parse_dupradar(multiqc_dir)
-for (tbl_name in c("strand_tbl", "readdist_tbl", "dupradar_tbl")) {
-  if (!is.null(get(tbl_name))) {
-    message(sprintf("qc_summary: loaded %s (%d rows)",
-                    tbl_name, nrow(get(tbl_name))))
-  }
-}
+extra_tbls <- list(
+  strand   = parse_infer_experiment(multiqc_dir),
+  readdist = parse_read_distribution(multiqc_dir),
+  dupradar = parse_dupradar(multiqc_dir)
+)
 
 summary_tbl <- samples %>%
   select(sample, condition, replicate, batch) %>%
   left_join(mqc_tbl, by = "sample")
-for (extra in list(strand_tbl, readdist_tbl, dupradar_tbl)) {
-  if (!is.null(extra)) {
-    summary_tbl <- left_join(summary_tbl, extra, by = "sample")
-  }
+for (nm in names(extra_tbls)) {
+  tbl <- extra_tbls[[nm]]
+  if (is.null(tbl)) next
+  message(sprintf("qc_summary: loaded %s (%d rows)", nm, nrow(tbl)))
+  summary_tbl <- left_join(summary_tbl, tbl, by = "sample")
 }
 summary_tbl <- left_join(summary_tbl, assigned_tbl, by = "sample")
 

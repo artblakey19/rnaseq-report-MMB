@@ -22,7 +22,7 @@
 nf-core/rnaseq 분석 결과물 두 개가 필요:
 
 - `salmon.merged.gene_counts_length_scaled.tsv` — count 행렬
-- `multiqc_report_data/` (nf-core/rnaseq) 또는 `multiqc_data/` (일반 MultiQC)
+- `multiqc_report_data/` — 같은 nf-core 런의 MultiQC 데이터 디렉터리
 
 ### Colab에서 실행
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/artblakey19/BulkRNAseq-Analyzer/blob/main/notebooks/colab_pipeline.ko.ipynb)
@@ -59,7 +59,7 @@ HTML Report는 `results/report/report.html`에 생성됨.
 
 ### 로컬 실행(Docker)
 
-Docker volume을 바인드할 디렉터리에 counts TSV와 `multiqc_data/`를 둔다.
+Docker volume을 바인드할 디렉터리에 counts TSV와 `multiqc_report_data/`를 둔다.
 동일한 이미지가 세 가지 서브커맨드를 제공: `init`이 config 생성, 기본 커맨드가 파이프라인 실행, `jupyter`가 JupyterLab 실행.
 
 ```bash

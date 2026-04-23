@@ -29,9 +29,6 @@ CONFIG_TEMPLATE = SCRIPT_ROOT / "config" / "config.template.yaml"
 
 
 def prompt(message: str, default: str | None = None) -> str:
-    # `default=""` is a legitimate "skip this optional field" signal (e.g.
-    # Notes). Callers that ship `""` as a placeholder for "no default yet"
-    # should strip it to None before calling.
     suffix = f" [{default}]" if default else ""
     while True:
         answer = input(f"{message}{suffix}: ").strip()
@@ -78,17 +75,10 @@ def suggest_counts(root: Path) -> list[Path]:
 
 
 def suggest_multiqc(root: Path) -> list[Path]:
-    # qc.R only needs a directory containing multiqc_general_stats.{txt,tsv}
-    # (or general_stats.{tsv,txt}). MultiQC / nf-core output the parent dir
-    # under various names — "multiqc_data", "multiqc_report_data",
-    # "<prefix>_multiqc_data" — so match by the presence of the stats file
-    # rather than the directory name.
-    needles = {"multiqc_general_stats.txt", "multiqc_general_stats.tsv",
-               "general_stats.tsv", "general_stats.txt"}
     hits: list[Path] = []
-    for dirpath, _, filenames in _walk_limited(root):
-        if any(f in needles for f in filenames):
-            hits.append(dirpath)
+    for dirpath, dirnames, _ in _walk_limited(root):
+        if "multiqc_report_data" in dirnames:
+            hits.append(dirpath / "multiqc_report_data")
     return hits
 
 
@@ -164,7 +154,7 @@ def collect_input_paths(existing: dict) -> dict:
         default=inp.get("counts_tsv") or None,
     )
     inp["multiqc_data_dir"] = prompt_path(
-        "Path to multiqc_report_data/ (nf-core) or multiqc_data/ (stock MultiQC)",
+        "Path to nf-core/rnaseq MultiQC data directory",
         REPO_ROOT,
         suggest_multiqc(REPO_ROOT),
         default=inp.get("multiqc_data_dir") or None,
