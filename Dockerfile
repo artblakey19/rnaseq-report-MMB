@@ -5,10 +5,10 @@
 #   jupyter  → JupyterLab server on port 8888 for notebooks/explore.ipynb
 #   default  → Snakemake pipeline (any extra args forwarded to snakemake)
 #
-# The R/Bioconductor stack that notebooks read is baked into the base env
-# so the Jupyter use case is zero-setup. Pipeline rules still resolve their
-# own conda envs under workflow/envs/*.yaml via --use-conda on first run
-# (cached in .snakemake/conda/ on the bind-mounted project directory).
+# The complete pipeline runtime is baked into the base env at image build
+# time. Snakemake still carries per-rule conda directives for native/advanced
+# runs, but this Docker image does not pass --use-conda by default, so runtime
+# execution does not resolve or create .snakemake/conda environments.
 #
 # Build (single arch, local):
 #   docker build -t bulk-rnaseq:latest .
@@ -27,12 +27,13 @@
 # /project's ownership and switches to it via gosu, and sets HOME=/tmp so
 # conda/mamba/jupyter have a writable cache. No `-u` or `-e HOME=/tmp` needed.
 
-FROM mambaorg/micromamba:latest
+# Pin the builder/runtime base instead of using :latest. Bump intentionally
+# after rebuilding and smoke-testing the image.
+FROM mambaorg/micromamba:1.5.10
 
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 
-# System packages that Snakemake, conda env resolution, and the UID shim
-# expect.
+# System packages that Snakemake, Quarto, and the UID shim expect.
 USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -42,29 +43,40 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 USER $MAMBA_USER
 
-# Base env combines:
-#   - pipeline drivers (snakemake, mamba, pandas, pyyaml)
-#   - JupyterLab + R kernel + the R/Bioconductor stack that explore.ipynb
-#     loads (versions aligned with workflow/envs/r-*.yaml so .rds files
-#     written by pipeline rules are readable by the notebook)
-# Python per-rule deps (decoupler-py, requests) stay out of base — those
-# rules still resolve their own envs under workflow/envs/py-*.yaml.
+# Base env contains the full Docker runtime: pipeline driver, Python rule
+# dependencies, Quarto report stack, JupyterLab, and R/Bioconductor packages.
 RUN micromamba install -y -n base -c conda-forge -c bioconda \
-        snakemake \
-        conda \
-        mamba \
-        pandas \
-        pyyaml \
+        python=3.11 \
+        snakemake=9 \
+        pandas=2 \
+        numpy \
+        anndata \
+        decoupler-py \
+        requests \
+        pyyaml=6 \
         jupyterlab \
+        quarto \
+        texlive-core \
         r-base=4.3 \
         r-irkernel \
         r-tidyverse \
+        r-rmarkdown \
+        r-knitr \
+        r-quarto \
+        r-dplyr \
+        r-tidyr \
+        r-ggplot2 \
+        r-scales \
+        r-dt \
+        r-plotly \
+        r-htmltools \
         r-matrixstats \
         r-pheatmap \
         r-ggrepel \
         r-yaml \
         r-readr \
         r-msigdbr \
+        r-data.table \
         bioconductor-deseq2 \
         bioconductor-apeglm \
         bioconductor-summarizedexperiment \
@@ -99,7 +111,6 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/bulk-rnaseq-entry.sh
 #   /project/<counts>.tsv           (path comes from config.yaml)
 #   /project/multiqc_data/
 #   /project/notebooks/             (for the `jupyter` sub-command)
-#   /project/.snakemake/conda/      (created automatically; reused on rerun)
 WORKDIR /project
 
 EXPOSE 8888

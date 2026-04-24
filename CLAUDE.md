@@ -54,7 +54,7 @@ When editing, grep before committing — `grep -rn "<old-name>" --include='*.smk
 7. **README**
    - `README.md` §"Report sections" table — add row
    - `README.ko.md` §"리포트 섹션" table — add row
-8. **Docker image** — if the new conda env needs packages also used by notebooks (i.e., loaded by `explore.ipynb` directly from the baked base env), add those packages to the base-env install in `Dockerfile`. If the step is pipeline-only (consumed as TSV/CSV in the notebook), no Dockerfile change needed.
+8. **Docker image** — Docker's default execution path uses the baked base env, not `--use-conda`. Any package needed by a pipeline rule or notebook must be mirrored in the base-env install in `Dockerfile`.
 9. **Rulegraph** — regenerate `docs/rulegraph.svg` with `snakemake --rulegraph | dot -Tsvg > docs/rulegraph.svg` so README's Workflow diagram reflects the new node.
 10. **Smoke test** — the dry-run workflow (`.github/workflows/test.yml`) picks up the new rule automatically, but verify `snakemake --dry-run --configfile tests/test_data/config_test.yaml` still resolves locally before pushing.
 
@@ -82,7 +82,7 @@ Rule names appear as directory names, config keys, and labels. Touch:
 ### Changing an environment's package set
 
 - Edit `workflow/envs/<env>.yaml`. Snakemake hashes this file; on next `--use-conda` run it rebuilds the env at a new hash (old `.snakemake/conda/<old-hash>` lingers until user cleans up — safe to ignore).
-- `Dockerfile` base env — if the package is **also** used by notebooks (loaded directly in `explore.ipynb`), mirror the addition in `Dockerfile`'s `micromamba install` line so the baked Jupyter stack matches.
+- `Dockerfile` base env — mirror package changes in `Dockerfile`'s `micromamba install` line. Docker runs use the baked base env by default, so rule dependencies and notebook dependencies both belong there.
 - `notebooks/colab_pipeline*.ipynb` — the Colab Explore section installs `fgsea/msigdbr/httr/jsonlite` into the r-deseq2 env on demand. If a notebook cell starts requiring a new package, extend the `need = [...]` list in that install cell.
 
 ### Renaming display terminology (TFEA, cMap, PROGENy, etc.)

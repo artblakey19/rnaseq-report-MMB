@@ -6,9 +6,9 @@
 #               into /project based on host-mounted counts + sample info.
 #   jupyter   → launches JupyterLab on :8888 rooted at /project, so
 #               /project/notebooks/explore.ipynb can load pipeline outputs.
-#   *         → default: runs the Snakemake pipeline. Positional args are
-#               forwarded to snakemake (e.g. --cores all, --configfile ...,
-#               --dry-run).
+#   *         → default: runs the Snakemake pipeline against the baked image
+#               runtime. Positional args are forwarded to snakemake (e.g.
+#               --cores all, --configfile ..., --dry-run).
 set -euo pipefail
 
 case "${1:-}" in
@@ -29,6 +29,6 @@ case "${1:-}" in
         ;;
     *)
         exec micromamba run -n base \
-            snakemake --snakefile /app/workflow/Snakefile --use-conda "$@"
+            snakemake --snakefile /app/workflow/Snakefile "$@"
         ;;
 esac
