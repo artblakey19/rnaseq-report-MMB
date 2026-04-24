@@ -20,12 +20,12 @@ rule render_report:
         qc_summary = RESULTS / "qc" / "qc_summary.tsv",
         pca = RESULTS / "exploratory" / "pca.rds",
         dds_vst = RESULTS / "exploratory" / "dds_vst.rds",
-        de = expand(RESULTS / "de" / "{contrast}" / "deseq2_results.csv", contrast=CONTRAST_IDS),
-        gsea = expand(RESULTS / "enrichment" / "{contrast}" / "gsea_combined.csv", contrast=CONTRAST_IDS),
-        ora = expand(RESULTS / "enrichment" / "{contrast}" / "ora_combined.csv", contrast=CONTRAST_IDS),
-        tf = expand(RESULTS / "tfea" / "{contrast}" / "tf_scores.tsv", contrast=CONTRAST_IDS),
-        progeny = expand(RESULTS / "progeny" / "{contrast}" / "progeny_scores.tsv", contrast=CONTRAST_IDS),
-        l2s2 = expand(RESULTS / "cmap" / "{contrast}" / "l2s2_hits.tsv", contrast=CONTRAST_IDS),
+        de = DE_OUTPUTS,
+        gsea = GSEA_OUTPUTS,
+        ora = ORA_OUTPUTS,
+        tf = TFEA_OUTPUTS,
+        progeny = PROGENY_OUTPUTS,
+        l2s2 = CMAP_OUTPUTS,
         # Resolved against the workflow source (repo root native, /app in
         # Docker) rather than the Snakemake workdir (/project bind-mount in
         # Docker), so the baked template is found regardless of CWD.

@@ -1,12 +1,12 @@
 project:
-  name: "test-fixture"
+  name: "test-fixture-disabled"
   analyst: "ci"
   experiment:
     cell_line: "A549"
     compound: "TestCompound"
     dose: "10 uM"
     duration: "24 h"
-    notes: "test fixture"
+    notes: "optional stages disabled"
 
 input:
   counts_tsv: "tests/test_data/counts.tsv"
@@ -26,7 +26,7 @@ de:
     abs_lfc: 0.5
 
 enrichment:
-  enabled: true
+  enabled: false
   gsea:
     ranking: "stat"
     min_size: 15
@@ -38,13 +38,10 @@ enrichment:
     min_input_genes: 100
     max_input_genes: 500
     databases:
-      - {id: GO_BP,    label: "GO Biological Process"}
-      - {id: KEGG,     label: KEGG}
-      - {id: Reactome, label: Reactome}
-      - {id: Hallmark, label: Hallmark}
+      - {id: GO_BP, label: "GO Biological Process"}
 
 tfea:
-  enabled: true
+  enabled: false
   method: "ulm"
   split_complexes: false
   min_size: 5
@@ -52,11 +49,11 @@ tfea:
   top_n: 50
 
 progeny:
-  enabled: true
+  enabled: false
   top_targets: 500
 
 cmap:
-  enabled: true
+  enabled: false
   service: "l2s2"
   top_up: 250
   top_down: 250

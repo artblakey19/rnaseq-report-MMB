@@ -1,16 +1,58 @@
-import pandas as pd
+import sys
 from pathlib import Path
 
-configfile: "config/config.yaml"
+DEFAULT_CONFIG = Path("config/config.yaml")
+if DEFAULT_CONFIG.exists():
+    configfile: str(DEFAULT_CONFIG)
 
 
-SAMPLES = pd.read_csv(config["input"]["samples_tsv"], sep="\t").set_index("sample", drop=False)
-CONTRASTS = pd.read_csv(config["input"]["contrasts_tsv"], sep="\t").set_index("contrast_id", drop=False)
+sys.path.insert(0, str(Path(workflow.basedir) / "scripts"))
+from validate_config import load_config_tables, validate_config
+
+
+SAMPLES_RAW, CONTRASTS_RAW, COUNTS_HEADER = load_config_tables(config)
+validate_config(config, SAMPLES_RAW, CONTRASTS_RAW, COUNTS_HEADER)
+
+SAMPLES = SAMPLES_RAW.set_index("sample", drop=False)
+CONTRASTS = CONTRASTS_RAW.set_index("contrast_id", drop=False)
 
 SAMPLE_IDS = SAMPLES["sample"].tolist()
 CONTRAST_IDS = CONTRASTS["contrast_id"].tolist()
 
 RESULTS = Path("results")
+
+ENRICHMENT_ENABLED = config["enrichment"]["enabled"]
+TFEA_ENABLED = config["tfea"]["enabled"]
+PROGENY_ENABLED = config["progeny"]["enabled"]
+CMAP_ENABLED = config["cmap"]["enabled"]
+
+DE_OUTPUTS = expand(RESULTS / "de" / "{contrast}" / "deseq2_results.csv", contrast=CONTRAST_IDS)
+GSEA_OUTPUTS = (
+    expand(RESULTS / "enrichment" / "{contrast}" / "gsea_combined.csv", contrast=CONTRAST_IDS)
+    if ENRICHMENT_ENABLED else []
+)
+ORA_OUTPUTS = (
+    expand(RESULTS / "enrichment" / "{contrast}" / "ora_combined.csv", contrast=CONTRAST_IDS)
+    if ENRICHMENT_ENABLED else []
+)
+TFEA_OUTPUTS = (
+    expand(RESULTS / "tfea" / "{contrast}" / "tf_scores.tsv", contrast=CONTRAST_IDS)
+    if TFEA_ENABLED else []
+)
+PROGENY_OUTPUTS = (
+    expand(RESULTS / "progeny" / "{contrast}" / "progeny_scores.tsv", contrast=CONTRAST_IDS)
+    if PROGENY_ENABLED else []
+)
+CMAP_OUTPUTS = (
+    expand(RESULTS / "cmap" / "{contrast}" / "l2s2_hits.tsv", contrast=CONTRAST_IDS)
+    if CMAP_ENABLED else []
+)
+REPORT_OUTPUTS = [RESULTS / "report" / "report.html"]
+
+ALL_INPUTS = [
+    RESULTS / "qc" / "qc_summary.tsv",
+    RESULTS / "exploratory" / "pca.rds",
+] + DE_OUTPUTS + GSEA_OUTPUTS + ORA_OUTPUTS + TFEA_OUTPUTS + PROGENY_OUTPUTS + CMAP_OUTPUTS + REPORT_OUTPUTS
 
 
 wildcard_constraints:
@@ -26,12 +68,4 @@ include: "rules/report.smk"
 
 rule all:
     input:
-        RESULTS / "qc" / "qc_summary.tsv",
-        RESULTS / "exploratory" / "pca.rds",
-        expand(RESULTS / "de" / "{contrast}" / "deseq2_results.csv", contrast=CONTRAST_IDS),
-        expand(RESULTS / "enrichment" / "{contrast}" / "gsea_combined.csv", contrast=CONTRAST_IDS),
-        expand(RESULTS / "enrichment" / "{contrast}" / "ora_combined.csv", contrast=CONTRAST_IDS),
-        expand(RESULTS / "tfea" / "{contrast}" / "tf_scores.tsv", contrast=CONTRAST_IDS),
-        expand(RESULTS / "progeny" / "{contrast}" / "progeny_scores.tsv", contrast=CONTRAST_IDS),
-        expand(RESULTS / "cmap" / "{contrast}" / "l2s2_hits.tsv", contrast=CONTRAST_IDS),
-        RESULTS / "report" / "report.html",
+        ALL_INPUTS

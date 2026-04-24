@@ -15,6 +15,8 @@ from textwrap import dedent
 
 import yaml
 
+from validate_config import SUPPORTED_CONFIG_SCHEMA
+
 # PROJECT_ROOT env var lets the Docker wrapper point REPO_ROOT at the
 # bind-mounted /project instead of the baked-in /app, so relative counts
 # paths resolve against the host project dir. The config template is a
@@ -26,6 +28,19 @@ DEFAULT_CONFIG = REPO_ROOT / "config" / "config.yaml"
 DEFAULT_SAMPLES = REPO_ROOT / "config" / "samples.tsv"
 DEFAULT_CONTRASTS = REPO_ROOT / "config" / "contrasts.tsv"
 CONFIG_TEMPLATE = SCRIPT_ROOT / "config" / "config.template.yaml"
+
+
+def prune_to_schema(value, schema):
+    if isinstance(schema, dict) and isinstance(value, dict):
+        return {
+            key: prune_to_schema(value[key], child_schema)
+            for key, child_schema in schema.items()
+            if key in value
+        }
+    if isinstance(schema, list) and isinstance(value, list):
+        child_schema = schema[0]
+        return [prune_to_schema(item, child_schema) for item in value]
+    return value
 
 
 def prompt(message: str, default: str | None = None) -> str:
@@ -124,7 +139,7 @@ def load_existing_config(path: Path) -> dict:
     if not source.exists():
         raise SystemExit(f"config template missing: {CONFIG_TEMPLATE}")
     with source.open() as f:
-        return yaml.safe_load(f)
+        return prune_to_schema(yaml.safe_load(f), SUPPORTED_CONFIG_SCHEMA)
 
 
 def collect_project_meta(existing: dict) -> dict:

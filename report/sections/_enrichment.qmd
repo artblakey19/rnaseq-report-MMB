@@ -43,7 +43,9 @@ gsea_all <- safe_read(gsea_path)
     dplyr::ungroup()
 }
 
-if (is.null(gsea_all) || nrow(gsea_all) == 0) {
+if (!isTRUE(enrichment_enabled)) {
+  cat(as.character(no_results("GSEA / ORA stage disabled in config.yaml.")))
+} else if (is.null(gsea_all) || nrow(gsea_all) == 0) {
   cat(as.character(no_results("GSEA returned no enriched sets for this contrast.")))
 } else {
   colls <- unique(as.character(gsea_all$collection))
@@ -182,7 +184,10 @@ if (is_html_report()) {
 } else {
   cat("\n\n#### ORA input gene list\n\n")
 }
-if (is.null(ora_input_genes) || nrow(ora_input_genes) == 0) {
+if (!isTRUE(enrichment_enabled)) {
+  cat(as.character(no_results("GSEA / ORA stage disabled in config.yaml.")))
+  cat("\n\n")
+} else if (is.null(ora_input_genes) || nrow(ora_input_genes) == 0) {
   cat(as.character(no_results(sprintf(
     "No ORA input gene list selected: primary and secondary tiers both yielded fewer than %d genes.",
     ora_min_genes
@@ -231,7 +236,9 @@ ora <- safe_read(ora_path)
   ifelse(is.na(out), id, out)
 }
 
-if (is.null(ora) || nrow(ora) == 0) {
+if (!isTRUE(enrichment_enabled)) {
+  cat(as.character(no_results("GSEA / ORA stage disabled in config.yaml.")))
+} else if (is.null(ora) || nrow(ora) == 0) {
   cat(as.character(no_results("ORA returned no results (insufficient DEG or empty output).")))
 } else {
   ora_dbs <- unique(as.character(ora$database))
@@ -318,7 +325,9 @@ if (is.null(ora) || nrow(ora) == 0) {
 ```{r enr-tf-activity, results='asis', fig.width=8, fig.height=9}
 tf_path <- file.path(project_root, "results", "tfea", cid, "tf_scores.tsv")
 tf <- safe_read(tf_path, sep = "\t")
-if (is.null(tf) || nrow(tf) == 0) {
+if (!isTRUE(tfea_enabled)) {
+  cat(as.character(no_results("TFEA stage disabled in config.yaml.")))
+} else if (is.null(tf) || nrow(tf) == 0) {
   cat(as.character(no_results("TFEA output is empty (network fetch may have failed).")))
 } else {
   tf_top <- tf |>
@@ -379,7 +388,9 @@ den  <- if (is.null(crow)) NA else as.character(crow$denominator)
 sample_cond <- NULL
 pw_mat <- NULL
 
-if (is.null(pw) || nrow(pw) == 0 ||
+if (!isTRUE(progeny_enabled)) {
+  no_results("PROGENy stage disabled in config.yaml.")
+} else if (is.null(pw) || nrow(pw) == 0 ||
     ncol(pw) < 2 ||
     all(vapply(pw[, -1, drop = FALSE], function(x) all(is.na(x)), logical(1)))) {
   no_results("PROGENy scores unavailable or all-NA.")
@@ -441,7 +452,9 @@ if (is.null(pw) || nrow(pw) == 0 ||
 #### Treated vs control delta (raw scale) + Wilcoxon p
 
 ```{r enr-progeny-delta}
-if (is.null(pw) || nrow(pw) == 0 || ncol(pw) < 2 ||
+if (!isTRUE(progeny_enabled)) {
+  no_results("PROGENy stage disabled in config.yaml.")
+} else if (is.null(pw) || nrow(pw) == 0 || ncol(pw) < 2 ||
     is.na(num) || is.na(den) ||
     !length(which(sample_cond == num)) ||
     !length(which(sample_cond == den))) {
@@ -488,13 +501,20 @@ if (nrow(contrasts) == 0) {
   print(no_results("No contrasts defined in contrasts.tsv."))
 }
 
+enrichment_enabled <- isTRUE(cfg$enrichment$enabled %||% TRUE)
+tfea_enabled <- isTRUE(cfg$tfea$enabled %||% TRUE)
+progeny_enabled <- isTRUE(cfg$progeny$enabled %||% TRUE)
+
 for (cid in contrasts$contrast_id) {
   env <- new.env(parent = globalenv())
-  env$cid          <- cid
-  env$project_root <- project_root
-  env$safe_read    <- safe_read
-  env$no_results   <- no_results
-  env$`%||%`       <- `%||%`
+  env$cid                <- cid
+  env$project_root       <- project_root
+  env$safe_read          <- safe_read
+  env$no_results         <- no_results
+  env$enrichment_enabled <- enrichment_enabled
+  env$tfea_enabled       <- tfea_enabled
+  env$progeny_enabled    <- progeny_enabled
+  env$`%||%`             <- `%||%`
 
   out <- knitr::knit_child(
     text  = enr_child_template,

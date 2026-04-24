@@ -295,6 +295,10 @@ cat(sprintf("| DE prefilter (min count / mode) | %s / %s |\n",
             de_cfg$prefilter_min_count %||% "—",
             de_cfg$prefilter_min_samples_mode %||% "—"))
 cat(sprintf("| DE LFC shrink | %s |\n", de_cfg$lfc_shrink %||% "—"))
+cat(sprintf("| Enrichment enabled | %s |\n", cfg$enrichment$enabled %||% "—"))
+cat(sprintf("| TFEA enabled | %s |\n", cfg$tfea$enabled %||% "—"))
+cat(sprintf("| PROGENy enabled | %s |\n", cfg$progeny$enabled %||% "—"))
+cat(sprintf("| cMap enabled | %s |\n", cfg$cmap$enabled %||% "—"))
 cat(sprintf("| Primary DEG | padj < %s & |LFC| >= %s |\n",
             prim$padj   %||% "—", prim$abs_lfc   %||% "—"))
 cat(sprintf("| Secondary DEG | padj < %s & |LFC| >= %s |\n",
