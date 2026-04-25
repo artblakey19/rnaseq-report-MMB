@@ -237,7 +237,7 @@ flowchart TD
 
 | Stage | Analytical objective | Method | Primary deliverable |
 |---|---|---|---|
-| **Quality control** | Assess library preparation and alignment integrity. | MultiQC aggregation of FastQC, STAR/Salmon, and RSeQC metrics. | Per-sample table of duplication, alignment rate, rRNA contamination, and strandedness. |
+| **Quality control** | Assess library preparation and alignment integrity. | MultiQC aggregation of FastQC, STAR/Salmon, and RSeQC metrics. | Per-sample table of alignment, contamination, complexity, and handling-failure indicators (5'/3' bias, intronic/intergenic, insert size, GC). |
 | **Exploratory analysis** | Evaluate sample grouping structure and detect outliers prior to inference. | VST-transformed counts; PCA on top 500 most-variable genes; sample-to-sample correlation. | PCA projection, correlation heatmap, dendrogram. |
 | **Differential expression** | Quantify condition-associated changes in gene expression. | DESeq2 Wald test with apeglm log-fold-change shrinkage. | Results table with shrunken LFC, Wald statistic, and adjusted *p*-values; volcano, MA, and top-DEG heatmap. |
 | **Gene set enrichment (GSEA)** | Identify gene sets coordinately perturbed across the full ranked list. | Pre-ranked GSEA on Wald statistic across selected MSigDB collections. | Normalized enrichment score and adjusted *p*-value per gene set. |
@@ -252,7 +252,7 @@ flowchart TD
 
 | 단계 | 분석 목적 | 방법 | 주 산출물 |
 |---|---|---|---|
-| **Quality control** | 라이브러리 준비와 정렬 품질 평가. | FastQC, STAR/Salmon, RSeQC metric을 MultiQC로 집계. | 샘플별 duplication, alignment rate, rRNA contamination, strandedness. |
+| **Quality control** | 라이브러리 준비와 정렬 품질 평가. | FastQC, STAR/Salmon, RSeQC metric을 MultiQC로 집계. | 샘플별 alignment, contamination, complexity, 처리 실패 지표 (5'/3' bias, intronic/intergenic, insert size, GC). |
 | **탐색 분석** | 샘플 그룹 구조 확인 및 Outlier 확인. | VST 변환 카운트 · top 500 variable gene PCA · 샘플-샘플 Correlation. | PCA 투영, 상관 heatmap, dendrogram. |
 | **차등발현** | 조건별 유전자 발현 변화 정량화. | DESeq2 Wald test + apeglm log-fold-change shrinkage. | shrunken LFC, Wald statistic, 조정 *p*-value 결과 표 · volcano · MA · top-DEG heatmap. |
 | **Gene set enrichment (GSEA)** | 활성/비활성화 된 gene set 탐색. | 선택된 MSigDB collection에 대해 Wald statistic 기반 pre-ranked GSEA. | Gene set별 NES 및 조정 *p*-value. |

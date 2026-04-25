@@ -24,7 +24,9 @@ REQUIRED_COLS <- c(
   "sample", "condition", "replicate", "batch",
   "total_reads", "mapping_rate", "uniquely_mapped_pct",
   "rrna_pct", "duplication", "dupradar_slope",
-  "strandedness", "exonic_pct",
+  "exonic_pct", "intronic_pct", "intergenic_pct",
+  "gene_body_5_3_bias", "insert_size_median", "gc_content_pct",
+  "strandedness",
   "assigned_reads"
 )
 
@@ -69,7 +71,16 @@ metric_aliases <- list(
                           "pct_uniquely_mapped"),
   rrna_pct            = c("rrna_pct", "rrna", "percent_rrna", "pct_rrna"),
   duplication         = c("duplication", "percent_duplication",
-                          "pct_duplication", "percent_duplicates")
+                          "pct_duplication", "percent_duplicates"),
+  # FastQC %GC. Outliers signal foreign-organism contamination, adapter dimers,
+  # or unbalanced rRNA depletion. Tissue-typical GC clusters are tight, so a
+  # single sample sitting >5pp from the cohort mean is a red flag.
+  gc_content_pct      = c("percent_gc", "gc_pct", "gc_content", "avg_gc"),
+  # samtools stats / Picard CollectInsertSizeMetrics. Short median insert size
+  # = over-fragmentation or adapter read-through; very long = under-fragmented
+  # library or PCR chimera.
+  insert_size_median  = c("insert_size_median", "median_insert_size",
+                          "insert_size_average", "avg_insert_size")
 )
 
 normalise_name <- function(x) gsub("[^a-z0-9]", "_", tolower(x))
@@ -111,10 +122,10 @@ numeric_col <- function(df, pattern) {
   suppressWarnings(as.numeric(df[[hit[1]]]))
 }
 
-# Strandedness from RSeQC infer_experiment. MultiQC emits per-orientation
-# fractions (pe_* for paired-end, se_* for single-end); we merge them and
-# classify by the dominant category. Also return sense/antisense fractions
-# for the report.
+# Strandedness call from RSeQC infer_experiment. Used as a sanity-check column
+# only — dUTP chemistry is deterministic, so this is uniform across a properly
+# prepared cohort. Unexpected forward/unstranded calls flag a kit mix-up, not
+# a biology effect.
 parse_infer_experiment <- function(dir) {
   df <- load_mqc_module(dir, "multiqc_rseqc_infer_experiment.txt")
   if (is.null(df)) return(NULL)
@@ -131,26 +142,18 @@ parse_infer_experiment <- function(dir) {
   sense <- suppressWarnings(as.numeric(merge_cols(df, "sense")))
   anti  <- suppressWarnings(as.numeric(merge_cols(df, "antisense")))
   und   <- suppressWarnings(as.numeric(merge_cols(df, "undetermined")))
-  # Scale to percent if MultiQC reported fractions (max <=1).
-  mx <- suppressWarnings(max(c(sense, anti, und), na.rm = TRUE))
-  if (is.finite(mx) && mx <= 1.01) {
-    sense <- sense * 100; anti <- anti * 100; und <- und * 100
-  }
   call <- mapply(function(s, a, u) {
     vals <- c(forward = s, reverse = a, unstranded = u)
     if (all(is.na(vals))) return(NA_character_)
     names(which.max(vals))
   }, sense, anti, und, USE.NAMES = FALSE)
-  tibble(
-    sample = df$sample,
-    strandedness = call,
-    strand_sense_pct = sense,
-    strand_antisense_pct = anti
-  )
+  tibble(sample = df$sample, strandedness = call)
 }
 
-# Exonic percentage from RSeQC read_distribution. The *_tag_pct columns are
-# the useful per-region numbers; exonic = CDS + 5'UTR + 3'UTR.
+# RSeQC read_distribution. exonic = CDS + 5'UTR + 3'UTR. Intronic and
+# intergenic percentages flag distinct failures: high intronic = pre-mRNA
+# (poly-A enrichment failure or nuclear RNA dominance); high intergenic =
+# genomic DNA contamination (DNase miss).
 parse_read_distribution <- function(dir) {
   df <- load_mqc_module(dir, "multiqc_rseqc_read_distribution.txt")
   if (is.null(df)) return(NULL)
@@ -159,7 +162,44 @@ parse_read_distribution <- function(dir) {
   utr3 <- numeric_col(df, "3_utr_exons_tag_pct")
   exonic <- rowSums(cbind(cds, utr5, utr3), na.rm = TRUE)
   exonic[is.na(cds) & is.na(utr5) & is.na(utr3)] <- NA_real_
-  tibble(sample = df$sample, exonic_pct = exonic)
+  introns <- numeric_col(df, "introns_tag_pct")
+  inter_mat <- cbind(
+    numeric_col(df, "tss_up_1kb_tag_pct"),
+    numeric_col(df, "tss_up_5kb_tag_pct"),
+    numeric_col(df, "tss_up_10kb_tag_pct"),
+    numeric_col(df, "tes_down_1kb_tag_pct"),
+    numeric_col(df, "tes_down_5kb_tag_pct"),
+    numeric_col(df, "tes_down_10kb_tag_pct"),
+    numeric_col(df, "other_intergenic_tag_pct")
+  )
+  intergenic <- rowSums(inter_mat, na.rm = TRUE)
+  intergenic[rowSums(!is.na(inter_mat)) == 0] <- NA_real_
+  tibble(
+    sample        = df$sample,
+    exonic_pct    = exonic,
+    intronic_pct  = introns,
+    intergenic_pct = intergenic
+  )
+}
+
+# RSeQC gene-body coverage 5'->3' bias. Coverage is binned into 100 percentiles
+# of transcript length; the ratio of mean coverage at the 5' flank to the 3'
+# flank summarises RNA integrity. ~1.0 = even coverage; <0.5 = strong 3' bias
+# (typical of degraded mRNA, since poly-A enrichment retains 3' ends while
+# truncated transcripts lose 5' coverage).
+parse_gene_body_coverage <- function(dir) {
+  df <- load_mqc_module(dir, "multiqc_rseqc_gene_body_coverage.txt")
+  if (is.null(df)) return(NULL)
+  pct_cols <- names(df)[grepl("^(i_)?\\d+$", names(df))]
+  if (length(pct_cols) < 50) return(NULL)
+  idx <- suppressWarnings(as.integer(sub("^i_", "", pct_cols)))
+  ord <- order(idx)
+  pct_cols <- pct_cols[ord]; idx <- idx[ord]
+  mat <- as.matrix(df[, pct_cols])
+  five  <- rowMeans(mat[, idx >=  5 & idx <= 15, drop = FALSE], na.rm = TRUE)
+  three <- rowMeans(mat[, idx >= 85 & idx <= 95, drop = FALSE], na.rm = TRUE)
+  bias <- ifelse(is.finite(three) & three > 0, five / three, NA_real_)
+  tibble(sample = df$sample, gene_body_5_3_bias = bias)
 }
 
 # dupRadar slope. Low slope => PCR-driven duplication (real complexity loss);
@@ -184,7 +224,9 @@ if (!is.null(mqc)) {
     mapping_rate        = suppressWarnings(as.numeric(pick_metric(mqc, metric_aliases$mapping_rate))),
     uniquely_mapped_pct = suppressWarnings(as.numeric(pick_metric(mqc, metric_aliases$uniquely_mapped_pct))),
     rrna_pct            = suppressWarnings(as.numeric(pick_metric(mqc, metric_aliases$rrna_pct))),
-    duplication         = suppressWarnings(as.numeric(pick_metric(mqc, metric_aliases$duplication)))
+    duplication         = suppressWarnings(as.numeric(pick_metric(mqc, metric_aliases$duplication))),
+    gc_content_pct      = suppressWarnings(as.numeric(pick_metric(mqc, metric_aliases$gc_content_pct))),
+    insert_size_median  = suppressWarnings(as.numeric(pick_metric(mqc, metric_aliases$insert_size_median)))
   )
   message(sprintf("qc_summary: loaded MultiQC general stats (%d samples)", nrow(mqc_tbl)))
 } else {
@@ -195,15 +237,18 @@ if (!is.null(mqc)) {
     mapping_rate        = NA_real_,
     uniquely_mapped_pct = NA_real_,
     rrna_pct            = NA_real_,
-    duplication         = NA_real_
+    duplication         = NA_real_,
+    gc_content_pct      = NA_real_,
+    insert_size_median  = NA_real_
   )
 }
 
 # Per-tool MultiQC modules (optional — absence does not fail the rule).
 extra_tbls <- list(
-  strand   = parse_infer_experiment(multiqc_dir),
-  readdist = parse_read_distribution(multiqc_dir),
-  dupradar = parse_dupradar(multiqc_dir)
+  strand    = parse_infer_experiment(multiqc_dir),
+  readdist  = parse_read_distribution(multiqc_dir),
+  dupradar  = parse_dupradar(multiqc_dir),
+  genebody  = parse_gene_body_coverage(multiqc_dir)
 )
 
 summary_tbl <- samples %>%
