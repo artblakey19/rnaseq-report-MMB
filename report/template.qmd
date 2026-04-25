@@ -233,10 +233,9 @@ flowchart TD
 
 ## Report structure and interpretation
 
-::: {.lang-en}
-
+::: lang-en
 | Stage | Analytical objective | Method | Primary deliverable |
-|---|---|---|---|
+|------------------|------------------|------------------|------------------|
 | **Quality control** | Assess library preparation and alignment integrity. | MultiQC aggregation of FastQC, STAR/Salmon, and RSeQC metrics. | Per-sample table of alignment, contamination, complexity, and handling-failure indicators (5'/3' bias, intronic/intergenic, insert size, GC). |
 | **Exploratory analysis** | Evaluate sample grouping structure and detect outliers prior to inference. | VST-transformed counts; PCA on top 500 most-variable genes; sample-to-sample correlation. | PCA projection, correlation heatmap, dendrogram. |
 | **Differential expression** | Quantify condition-associated changes in gene expression. | DESeq2 Wald test with apeglm log-fold-change shrinkage. | Results table with shrunken LFC, Wald statistic, and adjusted *p*-values; volcano, MA, and top-DEG heatmap. |
@@ -248,10 +247,9 @@ flowchart TD
 | **Audit trail** | Ensure reproducibility and provenance of the analysis. | Snapshot of configuration, input checksums, and computational environment. | Resolved config, input MD5 sums, and full session information. |
 :::
 
-::: {.lang-ko}
-
+::: lang-ko
 | 단계 | 분석 목적 | 방법 | 주 산출물 |
-|---|---|---|---|
+|------------------|------------------|------------------|------------------|
 | **Quality control** | 라이브러리 준비와 정렬 품질 평가. | FastQC, STAR/Salmon, RSeQC metric을 MultiQC로 집계. | 샘플별 alignment, contamination, complexity, 처리 실패 지표 (5'/3' bias, intronic/intergenic, insert size, GC). |
 | **탐색 분석** | 샘플 그룹 구조 확인 및 Outlier 확인. | VST 변환 카운트 · top 500 variable gene PCA · 샘플-샘플 Correlation. | PCA 투영, 상관 heatmap, dendrogram. |
 | **차등발현** | 조건별 유전자 발현 변화 정량화. | DESeq2 Wald test + apeglm log-fold-change shrinkage. | shrunken LFC, Wald statistic, 조정 *p*-value 결과 표 · volcano · MA · top-DEG heatmap. |
@@ -274,20 +272,6 @@ flowchart TD
 {{< include sections/_cmap.qmd >}}
 
 # Audit trail
-
-## Input provenance
-
-::: {.lang-en}
-- Gene counts: nf-core/rnaseq `salmon.merged.gene_counts_length_scaled.tsv`
-- `log2FoldChange` values reported in DE results are **apeglm-shrunken**.
-- `stat` values are **unshrunk Wald test statistics** (used as the GSEA ranking metric).
-:::
-
-::: {.lang-ko}
-- 유전자 카운트: nf-core/rnaseq `salmon.merged.gene_counts_length_scaled.tsv`.
-- DE 결과의 `log2FoldChange`는 **apeglm으로 shrink된 값**.
-- `stat`은 **shrink되지 않은 Wald test 통계량** (GSEA ranking metric).
-:::
 
 ## Cutoffs in use
 
@@ -391,11 +375,7 @@ run_meta <- data.frame(
   stringsAsFactors = FALSE
 )
 
-report_table(
-  run_meta,
-  rownames = FALSE,
-  options = list(pageLength = 4, dom = "t", scrollX = TRUE)
-)
+knitr::kable(run_meta, row.names = FALSE, booktabs = TRUE, longtable = TRUE)
 
 input_meta <- dplyr::bind_rows(
   file_meta("Config YAML", config_path),
@@ -405,62 +385,45 @@ input_meta <- dplyr::bind_rows(
   file_meta("MultiQC data directory", cfg$input$multiqc_data_dir %||% NA_character_)
 )
 
-report_table(
-  input_meta,
-  rownames = FALSE,
-  filter = "top",
-  options = list(
-    pageLength = 10,
-    lengthMenu = c(10, 25, 50),
-    scrollX = TRUE,
-    autoWidth = FALSE,
-    dom = "lfrtip",
-    columnDefs = list(
-      list(targets = which(names(input_meta) == "path") - 1,
-           className = "pathway-name-column"),
-      list(targets = which(names(input_meta) == "md5") - 1,
-           className = "pathway-name-column")
-    )
-  )
-)
+knitr::kable(input_meta, row.names = FALSE, booktabs = TRUE, longtable = TRUE)
 ```
 
 ## Tools and references
 
 **Workflow infrastructure**
 
-- Snakemake — Mölder F. et al. (2021). *F1000Research* 10:33. [doi:10.12688/f1000research.29032.2](https://doi.org/10.12688/f1000research.29032.2)
-- nf-core/rnaseq — Ewels P.A. et al. (2020). *Nat Biotechnol.* 38, 276–278. [doi:10.1038/s41587-020-0439-x](https://doi.org/10.1038/s41587-020-0439-x)
-- Quarto — <https://quarto.org>
+-   Snakemake — Mölder F. et al. (2021). *F1000Research* 10:33. [doi:10.12688/f1000research.29032.2](https://doi.org/10.12688/f1000research.29032.2)
+-   nf-core/rnaseq — Ewels P.A. et al. (2020). *Nat Biotechnol.* 38, 276–278. [doi:10.1038/s41587-020-0439-x](https://doi.org/10.1038/s41587-020-0439-x)
+-   Quarto — <https://quarto.org>
 
 **Quantification, counts, and QC**
 
-- Salmon — Patro R. et al. (2017). *Nat Methods* 14, 417–419. [doi:10.1038/nmeth.4197](https://doi.org/10.1038/nmeth.4197)
-- tximport — Soneson C., Love M.I., Robinson M.D. (2015). *F1000Research* 4:1521. [doi:10.12688/f1000research.7563.2](https://doi.org/10.12688/f1000research.7563.2)
-- MultiQC — Ewels P. et al. (2016). *Bioinformatics* 32(19), 3047–3048. [doi:10.1093/bioinformatics/btw354](https://doi.org/10.1093/bioinformatics/btw354)
+-   Salmon — Patro R. et al. (2017). *Nat Methods* 14, 417–419. [doi:10.1038/nmeth.4197](https://doi.org/10.1038/nmeth.4197)
+-   tximport — Soneson C., Love M.I., Robinson M.D. (2015). *F1000Research* 4:1521. [doi:10.12688/f1000research.7563.2](https://doi.org/10.12688/f1000research.7563.2)
+-   MultiQC — Ewels P. et al. (2016). *Bioinformatics* 32(19), 3047–3048. [doi:10.1093/bioinformatics/btw354](https://doi.org/10.1093/bioinformatics/btw354)
 
 **Differential expression**
 
-- DESeq2 — Love M.I., Huber W., Anders S. (2014). *Genome Biol.* 15, 550. [doi:10.1186/s13059-014-0550-8](https://doi.org/10.1186/s13059-014-0550-8)
-- apeglm — Zhu A., Ibrahim J.G., Love M.I. (2019). *Bioinformatics* 35(12), 2084–2092. [doi:10.1093/bioinformatics/bty895](https://doi.org/10.1093/bioinformatics/bty895)
+-   DESeq2 — Love M.I., Huber W., Anders S. (2014). *Genome Biol.* 15, 550. [doi:10.1186/s13059-014-0550-8](https://doi.org/10.1186/s13059-014-0550-8)
+-   apeglm — Zhu A., Ibrahim J.G., Love M.I. (2019). *Bioinformatics* 35(12), 2084–2092. [doi:10.1093/bioinformatics/bty895](https://doi.org/10.1093/bioinformatics/bty895)
 
 **Gene-set analysis**
 
-- GSEA (method) — Subramanian A. et al. (2005). *PNAS* 102(43), 15545–15550. [doi:10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102)
-- fgsea — Korotkevich G. et al. (2021). *bioRxiv.* [doi:10.1101/060012](https://doi.org/10.1101/060012)
-- clusterProfiler 4.0 — Wu T. et al. (2021). *The Innovation* 2(3), 100141. [doi:10.1016/j.xinn.2021.100141](https://doi.org/10.1016/j.xinn.2021.100141)
-- MSigDB / Hallmark — Liberzon A. et al. (2015). *Cell Systems* 1(6), 417–425. [doi:10.1016/j.cels.2015.12.004](https://doi.org/10.1016/j.cels.2015.12.004)
+-   GSEA (method) — Subramanian A. et al. (2005). *PNAS* 102(43), 15545–15550. [doi:10.1073/pnas.0506580102](https://doi.org/10.1073/pnas.0506580102)
+-   fgsea — Korotkevich G. et al. (2021). *bioRxiv.* [doi:10.1101/060012](https://doi.org/10.1101/060012)
+-   clusterProfiler 4.0 — Wu T. et al. (2021). *The Innovation* 2(3), 100141. [doi:10.1016/j.xinn.2021.100141](https://doi.org/10.1016/j.xinn.2021.100141)
+-   MSigDB / Hallmark — Liberzon A. et al. (2015). *Cell Systems* 1(6), 417–425. [doi:10.1016/j.cels.2015.12.004](https://doi.org/10.1016/j.cels.2015.12.004)
 
 **Regulatory and pathway activity inference**
 
-- decoupleR / decoupler-py — Badia-i-Mompel P. et al. (2022). *Bioinformatics Advances* 2(1), vbac016. [doi:10.1093/bioadv/vbac016](https://doi.org/10.1093/bioadv/vbac016)
-- CollecTRI — Müller-Dott S. et al. (2023). *Nucleic Acids Research* gkad841. [doi:10.1093/nar/gkad841](https://doi.org/10.1093/nar/gkad841)
-- PROGENy — Schubert M. et al. (2018). *Nat Commun* 9, 20. [doi:10.1038/s41467-017-02391-6](https://doi.org/10.1038/s41467-017-02391-6)
+-   decoupleR / decoupler-py — Badia-i-Mompel P. et al. (2022). *Bioinformatics Advances* 2(1), vbac016. [doi:10.1093/bioadv/vbac016](https://doi.org/10.1093/bioadv/vbac016)
+-   CollecTRI — Müller-Dott S. et al. (2023). *Nucleic Acids Research* gkad841. [doi:10.1093/nar/gkad841](https://doi.org/10.1093/nar/gkad841)
+-   PROGENy — Schubert M. et al. (2018). *Nat Commun* 9, 20. [doi:10.1038/s41467-017-02391-6](https://doi.org/10.1038/s41467-017-02391-6)
 
 **cMap / connectivity**
 
-- L1000 Connectivity Map — Subramanian A. et al. (2017). *Cell* 171(6), 1437–1452. [doi:10.1016/j.cell.2017.10.049](https://doi.org/10.1016/j.cell.2017.10.049)
-- L2S2 — L1000 signature search (Ma'ayan Lab). <https://l2s2.maayanlab.cloud>
+-   L1000 Connectivity Map — Subramanian A. et al. (2017). *Cell* 171(6), 1437–1452. [doi:10.1016/j.cell.2017.10.049](https://doi.org/10.1016/j.cell.2017.10.049)
+-   L2S2 — L1000 signature search (Ma'ayan Lab). <https://l2s2.maayanlab.cloud>
 
 ## Session info
 

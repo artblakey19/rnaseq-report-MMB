@@ -63,19 +63,25 @@ Place the counts TSV and `multiqc_report_data/` in the directory that will be bi
 
 ```bash
 # 1. Generate config (enter sample information at the prompts)
+# TZ is needed so run timestamps are recorded in your local time.
+# example: -e TZ=Asia/Seoul, -e TZ=America/New_York
+
 docker run --rm -it \
     -v "$PWD":/project \
+    -e TZ=<zone> \
     ghcr.io/artblakey19/bulk-rnaseq:latest init
 
 # 2. Run the pipeline against the generated config
 docker run --rm \
     -v "$PWD":/project \
+    -e TZ=<zone> \
     ghcr.io/artblakey19/bulk-rnaseq:latest \
     --configfile config/config.yaml --cores all
 
 # 3. (Optional) Launch JupyterLab to explore results interactively
 docker run --rm \
     -v "$PWD":/project \
+    -e TZ=<zone> \
     -p 8888:8888 \
     ghcr.io/artblakey19/bulk-rnaseq:latest jupyter
 ```

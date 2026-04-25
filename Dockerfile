@@ -34,12 +34,15 @@ FROM mambaorg/micromamba:1.5.10
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 
 # System packages that Snakemake, Quarto, and the UID shim expect.
+# tzdata is included so glibc honours `docker run -e TZ=<zone>` at runtime;
+# no default zone is baked in.
 USER root
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
         git \
         ca-certificates \
         gosu \
+        tzdata \
  && rm -rf /var/lib/apt/lists/*
 USER $MAMBA_USER
 

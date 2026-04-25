@@ -60,23 +60,34 @@ HTML Report는 `results/report/report.html`에 생성됨.
 ### 로컬 실행(Docker)
 
 Docker volume을 바인드할 디렉터리에 counts TSV와 `multiqc_report_data/`를 둔다.
-동일한 이미지가 세 가지 서브커맨드를 제공: `init`이 config 생성, 기본 커맨드가 파이프라인 실행, `jupyter`가 JupyterLab 실행.
+
+3가지 서브 커맨드
+
+- `init`: config 생성
+- `all`: 분석 파이프라인 실행(기본 커맨드)
+- `jupyter`: JupyterLab 실행
 
 ```bash
 # 1. config 생성 (샘플 정보 입력)
+# Time Zone은 실행 시간 기록에 필요
+# example: -e TZ=Asia/Seoul, -e TZ=America/New_York
+
 docker run --rm -it \
     -v "$PWD":/project \
+    -e TZ=<zone> \
     ghcr.io/artblakey19/bulk-rnaseq:latest init
 
 # 2. 생성된 config로 파이프라인 실행
 docker run --rm \
     -v "$PWD":/project \
+    -e TZ=<zone> \
     ghcr.io/artblakey19/bulk-rnaseq:latest \
     --configfile config/config.yaml --cores all
 
 # 3. (선택) JupyterLab으로 결과 interactive 탐색
 docker run --rm \
     -v "$PWD":/project \
+    -e TZ=<zone> \
     -p 8888:8888 \
     ghcr.io/artblakey19/bulk-rnaseq:latest jupyter
 ```
