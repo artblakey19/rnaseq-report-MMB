@@ -5,7 +5,6 @@ rule deseq2:
         contrasts = config["input"]["contrasts_tsv"],
     output:
         results = RESULTS / "de" / "{contrast}" / "deseq2_results.csv",
-        rds = RESULTS / "de" / "{contrast}" / "deseq2_object.rds",
         summary = RESULTS / "de" / "{contrast}" / "deg_summary.tsv",
     params:
         contrast_id = "{contrast}",

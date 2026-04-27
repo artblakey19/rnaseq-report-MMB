@@ -20,7 +20,6 @@ samples_path   <- snakemake@input[["samples"]]
 contrasts_path <- snakemake@input[["contrasts"]]
 
 results_out <- snakemake@output[["results"]]
-rds_out     <- snakemake@output[["rds"]]
 summary_out <- snakemake@output[["summary"]]
 
 target_contrast <- snakemake@params[["contrast_id"]]
@@ -138,7 +137,6 @@ out_df <- out_df[order(out_df$padj, na.last = TRUE), ]
 
 dir.create(dirname(results_out), showWarnings = FALSE, recursive = TRUE)
 write.csv(out_df, file = results_out, row.names = FALSE)
-saveRDS(dds, file = rds_out)
 
 # --- DEG cutoff summary ---------------------------------------------------
 cutoff_counts <- function(df, padj_cut, lfc_cut) {
