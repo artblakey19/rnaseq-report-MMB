@@ -13,7 +13,6 @@ input:
   samples_tsv: config/samples.tsv
   contrasts_tsv: config/contrasts.tsv
 de:
-  prefilter_min_count: 10
   primary:
     padj: 0.05
     abs_lfc: 1.0

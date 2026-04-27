@@ -9,7 +9,6 @@ rule deseq2:
         summary = RESULTS / "de" / "{contrast}" / "deg_summary.tsv",
     params:
         contrast_id = "{contrast}",
-        prefilter_min_count = config["de"]["prefilter_min_count"],
         primary = config["de"]["primary"],
         secondary = config["de"]["secondary"],
     log:

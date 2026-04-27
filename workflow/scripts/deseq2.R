@@ -23,10 +23,9 @@ results_out <- snakemake@output[["results"]]
 rds_out     <- snakemake@output[["rds"]]
 summary_out <- snakemake@output[["summary"]]
 
-target_contrast     <- snakemake@params[["contrast_id"]]
-prefilter_min_count <- snakemake@params[["prefilter_min_count"]]
-primary             <- snakemake@params[["primary"]]
-secondary           <- snakemake@params[["secondary"]]
+target_contrast <- snakemake@params[["contrast_id"]]
+primary         <- snakemake@params[["primary"]]
+secondary       <- snakemake@params[["secondary"]]
 
 # --- Contrast row ---------------------------------------------------------
 contrasts_df <- read.table(contrasts_path, header = TRUE, sep = "\t",
@@ -80,11 +79,12 @@ dds <- DESeqDataSetFromMatrix(countData = count_matrix,
                               design    = design_formula)
 rowData(dds)$gene_name <- gene_name_all[rownames(dds)]
 
-# Prefilter: keep genes with >= min_count in at least smallest_group samples.
+# Prefilter: keep genes with count >= 10 in at least smallest-group samples.
+# 10 is the value recommended for bulk RNA-seq in the DESeq2 vignette.
 smallest_group <- min(table(col_data$condition))
-keep <- rowSums(counts(dds) >= prefilter_min_count) >= smallest_group
-message(sprintf("Prefilter: keeping %d / %d genes (smallest_group=%d, min_count=%d)",
-                sum(keep), length(keep), smallest_group, prefilter_min_count))
+keep <- rowSums(counts(dds) >= 10) >= smallest_group
+message(sprintf("Prefilter: keeping %d / %d genes (smallest_group=%d)",
+                sum(keep), length(keep), smallest_group))
 dds <- dds[keep, ]
 
 # --- Fit + shrink ---------------------------------------------------------

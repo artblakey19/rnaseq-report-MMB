@@ -15,7 +15,6 @@ input:
   contrasts_tsv: "tests/test_data/contrasts.tsv"
 
 de:
-  prefilter_min_count: 10
   primary:
     padj: 0.05
     abs_lfc: 1.0
