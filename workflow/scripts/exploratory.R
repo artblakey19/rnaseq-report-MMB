@@ -1,9 +1,3 @@
-# Exploratory analysis — build VST DESeqTransform, PCA on top-500
-# variable genes, sample-sample Spearman correlation, hierarchical
-# clustering on 1 - Spearman.
-# Input: counts from `salmon.merged.gene_counts_length_scaled.tsv`
-# Output: vst_deseq.rds, pca_results.rds, correlations.rds, vst_matrix.tsv
-
 log_con <- file(snakemake@log[[1]], open = "wt")
 sink(log_con, type = "output")
 sink(log_con, type = "message")

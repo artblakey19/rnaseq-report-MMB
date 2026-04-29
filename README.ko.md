@@ -97,7 +97,7 @@ Jupyter 사용 시: 컨테이너 실행 후 터미널에 출력되는 `http://12
 | 단계                                 | 방법                                                       | 주 산출물                                                              |
 | ------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------------- |
 | **QC**                         | MultiQC로 FastQC / STAR / Salmon / RSeQC metric 집계.      | 샘플별 QC 표, library-size·mapping-rate plot.                         |
-| **탐색 분석**                  | VST 변환 후 top-500 variable gene PCA, sample correlation. | PCA, scree, dendrogram, correlation heatmap.                           |
+| **탐색 분석**                  | VST 변환 후 top-500 variable gene PCA, Euclidean 샘플 거리. | PCA, scree, dendrogram, 샘플 거리 heatmap.                            |
 | **차등발현**                   | DESeq2 Wald test + apeglm LFC shrinkage.                   | DEG 요약, volcano, MA, top-30 DEG heatmap, 전체 결과.                 |
 | **Gene-set enrichment (GSEA)** | pre-ranked GSEA (ranking matric: Wald stat).               | MSigDB H / C2:CP (Reactome, WikiPathways, PID, BioCarta) / C2:CGP / C6 |
 | **Over-representation (ORA)**  | `clusterProfiler::enricher()` + KEGG live REST.          | DB(GOBP, KEGG, Reactome, Hallmark)별 top-10 up/down                    |

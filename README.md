@@ -97,7 +97,7 @@ For Jupyter: paste the `http://127.0.0.1:8888/lab?token=...` URL printed in the 
 | Stage                          | Method                                                          | Primary deliverable                                                    |
 | ------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | **QC**                         | MultiQC aggregation of FastQC / STAR / Salmon / RSeQC metrics.  | Per-sample QC table, library-size and mapping-rate plots.              |
-| **Exploratory**                | VST; PCA on top-500 variable genes; sample correlation.         | PCA, scree, dendrogram, correlation heatmap.                           |
+| **Exploratory**                | VST; PCA on top-500 variable genes; Euclidean sample distances. | PCA, scree, dendrogram, sample-distance heatmap.                       |
 | **Differential expression**    | DESeq2 Wald test + apeglm LFC shrinkage.                        | DEG summary, volcano, MA, top-30 DEG heatmap, full results table.      |
 | **Gene-set enrichment (GSEA)** | Pre-ranked GSEA (ranking metric: Wald stat).                    | MSigDB H / C2:CP (Reactome, WikiPathways, PID, BioCarta) / C2:CGP / C6 |
 | **Over-representation (ORA)**  | `clusterProfiler::enricher()` + KEGG live REST.                 | Per-DB (GO BP, KEGG, Reactome, Hallmark) top-10 up / down              |
