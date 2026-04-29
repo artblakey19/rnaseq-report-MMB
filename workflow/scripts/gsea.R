@@ -20,73 +20,49 @@ table_out <- snakemake@output[["table"]]
 
 de_res <- read.csv(de_path, header = TRUE, stringsAsFactors = FALSE)
 
+# Calculate gene ranks
 if (ranking == "stat") {
   ranks_df <- de_res %>%
-    filter(!is.na(gene_name), !is.na(stat)) %>%
-    group_by(gene_name) %>%
-    summarize(metric = mean(stat)) %>%
+    filter(!is.na(gene_id), !is.na(stat)) %>%
+    transmute(gene_id, metric = stat) %>%
     arrange(desc(metric))
 } else if (ranking == "signed_p") {
   ranks_df <- de_res %>%
-    filter(!is.na(gene_name), !is.na(log2FoldChange), !is.na(pvalue)) %>%
-    mutate(metric = sign(log2FoldChange) * (-log10(pmax(pvalue, 1e-300)))) %>%
-    filter(is.finite(metric)) %>%
-    group_by(gene_name) %>%
-    summarize(metric = mean(metric)) %>%
+    filter(!is.na(gene_id), !is.na(log2FoldChange), !is.na(pvalue)) %>%
+    transmute(gene_id, metric = sign(log2FoldChange) * (-log10(pmax(pvalue, 1e-300)))) %>%
     arrange(desc(metric))
 } else {
   stop("Unsupported ranking method: ", ranking)
 }
-ranks <- setNames(ranks_df$metric, ranks_df$gene_name)
+# fgsea requires named vector
+ranks <- setNames(ranks_df$metric, ranks_df$gene_id)
 
 # --- MSigDB Data Prep & GSEA ----------------------------------------------
 get_pathways <- function(coll_str) {
-  parts <- unlist(strsplit(coll_str, ":"))
-  coll <- parts[1]
-  if (length(parts) > 1) {
-    subcoll <- paste(parts[-1], collapse = ":")
-    m <- msigdbr(species = "Homo sapiens", collection = coll, subcollection = subcoll)
-  } else {
-    m <- msigdbr(species = "Homo sapiens", collection = coll)
-  }
-  split(m$gene_symbol, m$gs_name)
+  parts <- strsplit(coll_str, ":", fixed = TRUE)[[1]]
+  m <- msigdbr(
+    species = "Homo sapiens",
+    collection = parts[1],
+    subcollection = if (length(parts) > 1) paste(parts[-1], collapse = ":") else NULL
+  )
+  split(m$ensembl_gene, m$gs_name)
 }
 
-all_res <- list()
-
-for (coll in colls) {
+run_gsea <- function(coll) {
   message("Running GSEA for collection: ", coll)
-  pathways <- get_pathways(coll)
-
-  fgsea_res <- fgsea(
-    pathways = pathways,
-    stats = ranks,
-    minSize = 15,
-    maxSize = 500
-  )
-
-  if (nrow(fgsea_res) > 0) {
-    res_df <- as.data.frame(fgsea_res)
-    res_df$collection <- coll
-    res_df$leadingEdge <- sapply(res_df$leadingEdge, paste, collapse = ";")
-    all_res[[coll]] <- res_df
+  res <- fgsea(get_pathways(coll), ranks, minSize = 15, maxSize = 500)
+  if (!nrow(res)) {
+    return(NULL)
   }
+  res$collection <- coll
+  res$leadingEdge <- vapply(res$leadingEdge, paste, character(1), collapse = ";")
+  as.data.frame(res)
 }
 
 col_order <- c("collection", "pathway", "pval", "padj", "log2err", "ES", "NES", "size", "leadingEdge")
-
-if (length(all_res) > 0) {
-  combined_df <- bind_rows(all_res)
-  combined_df <- combined_df[, intersect(col_order, colnames(combined_df))]
-} else {
-  message("No significant enrichment found or no pathways evaluated.")
-  combined_df <- data.frame(
-    collection = character(), pathway = character(),
-    pval = numeric(), padj = numeric(), log2err = numeric(),
-    ES = numeric(), NES = numeric(), size = integer(),
-    leadingEdge = character(), stringsAsFactors = FALSE
-  )
-}
+# Run GSEA for each collection
+combined_df <- bind_rows(lapply(colls, run_gsea))
+combined_df <- combined_df[, intersect(col_order, colnames(combined_df))]
 
 dir.create(dirname(table_out), showWarnings = FALSE, recursive = TRUE)
 write.csv(combined_df, table_out, row.names = FALSE)

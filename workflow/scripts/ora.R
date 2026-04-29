@@ -12,10 +12,10 @@ suppressPackageStartupMessages({
 set.seed(42)
 
 # --- Inputs / outputs / params --------------------------------------------
-de_path      <- snakemake@input[["de"]]
+de_path <- snakemake@input[["de"]]
 combined_out <- snakemake@output[["table"]]
 
-primary   <- snakemake@params[["primary"]]
+primary <- snakemake@params[["primary"]]
 secondary <- snakemake@params[["secondary"]]
 min_genes <- snakemake@params[["min_input_genes"]]
 max_genes <- snakemake@params[["max_input_genes"]]
@@ -82,29 +82,37 @@ message(sprintf("Using cutoff: %s. Up genes: %d, Down genes: %d", cutoff_used, l
 # --- ORA Functions --------------------------------------------------------
 
 run_msigdbr_ora <- function(genes, universe, collection, subcollection = NULL) {
-  if (length(genes) == 0) return(NULL)
-  m_df <- msigdbr(species = "Homo sapiens",
-                  collection = collection,
-                  subcollection = subcollection)
+  if (length(genes) == 0) {
+    return(NULL)
+  }
+  m_df <- msigdbr(
+    species = "Homo sapiens",
+    collection = collection,
+    subcollection = subcollection
+  )
   m_t2g <- dplyr::select(m_df, gs_name, gene_symbol)
-  enricher(gene = genes, TERM2GENE = m_t2g, universe = universe,
-           pvalueCutoff = 1, qvalueCutoff = 1)
+  enricher(
+    gene = genes, TERM2GENE = m_t2g, universe = universe,
+    pvalueCutoff = 1, qvalueCutoff = 1
+  )
 }
 
 run_kegg_ora <- function(genes_symbol, universe_symbol) {
-  if (length(genes_symbol) == 0) return(NULL)
-  
+  if (length(genes_symbol) == 0) {
+    return(NULL)
+  }
+
   # Suppress messages from bitr
   gene_map <- suppressMessages(bitr(genes_symbol, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db))
   dropped <- length(genes_symbol) - nrow(gene_map)
   if (dropped > 0) message("KEGG: dropped ", dropped, " genes during SYMBOL->ENTREZID mapping.")
-  
+
   univ_map <- suppressMessages(bitr(universe_symbol, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = org.Hs.eg.db))
-  
+
   res <- enrichKEGG(gene = gene_map$ENTREZID, organism = "hsa", keyType = "kegg", universe = univ_map$ENTREZID, pvalueCutoff = 1, qvalueCutoff = 1)
-  
+
   if (!is.null(res) && nrow(as.data.frame(res)) > 0) {
-    res <- setReadable(res, OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+    res <- setReadable(res, OrgDb = org.Hs.eg.db, keyType = "ENTREZID")
   }
   return(res)
 }
@@ -149,9 +157,11 @@ if (length(all_res_dfs) > 0) {
   final_df <- dplyr::bind_rows(all_res_dfs)
   rownames(final_df) <- NULL
 
-  expected_cols <- c("database", "direction", "cutoff", "ID", "Description",
-                     "GeneRatio", "BgRatio", "pvalue", "p.adjust", "qvalue",
-                     "geneID", "Count")
+  expected_cols <- c(
+    "database", "direction", "cutoff", "ID", "Description",
+    "GeneRatio", "BgRatio", "pvalue", "p.adjust", "qvalue",
+    "geneID", "Count"
+  )
   for (col in expected_cols) {
     if (!col %in% colnames(final_df)) final_df[[col]] <- NA
   }

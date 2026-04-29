@@ -1,17 +1,21 @@
-"""L2S2 connectivity query for drug repositioning (B8).
+"""
+L2S2 connectivity query
 
-Extracts up/down gene signatures from a DESeq2 results CSV (ranked by padj,
-filtered by sign of log2FoldChange) and queries the L2S2 paired-enrichment
-GraphQL API. On any transient error (timeout / 5xx) retries with exponential
-backoff. On permanent failure writes an empty TSV with the contracted header
-and records the reason in the log — never raises.
+Extracts up/down gene signatures from a DESeq2 results CSV (top-N selected
+by |wald stat| within each LFC sign) and queries the L2S2 paired-enrichment
+GraphQL API. Per-drug MoA is fetched in a follow-up batched fdaCount lookup
+(L2S2 returns drug names only in pairedEnrich; MoA lives on the FdaCount
+type and the web UI joins them client-side). On any transient error
+(timeout / 5xx) retries with exponential backoff. On permanent failure
+writes an empty TSV with the contracted header and records the reason in
+the log.
 
 API: https://l2s2.maayanlab.cloud (GraphQL, public, no auth).
 Docs: https://github.com/MaayanLab/L2S2
 """
 import csv
+import json
 import logging
-import os
 import random
 import sys
 import time
@@ -22,34 +26,19 @@ import pandas as pd
 import requests
 
 
-OUTPUT_COLUMNS = ["rank", "perturbagen", "moa", "target", "score", "pvalue", "fdr"]
+OUTPUT_COLUMNS = ["rank", "perturbagen", "moa", "score", "pvalue", "fdr"]
 
-DEFAULT_ENDPOINT = "https://l2s2.maayanlab.cloud/graphql"
+ENDPOINT = "https://l2s2.maayanlab.cloud/graphql"
 
 PAIRED_ENRICH_QUERY = """
-query PairEnrichmentQuery(
-  $genesUp: [String]!
-  $genesDown: [String]!
-  $first: Int = 250
-  $topN: Int = 10000
-  $pvalueLe: Float = 0.05
-) {
+query PairEnrichmentQuery($genesUp: [String]!, $genesDown: [String]!) {
   currentBackground {
-    pairedEnrich(
-      genesUp: $genesUp
-      genesDown: $genesDown
-      first: $first
-      topN: $topN
-      pvalueLe: $pvalueLe
-    ) {
-      consensusCount
+    pairedEnrich(genesUp: $genesUp, genesDown: $genesDown) {
       consensus {
         drug
         oddsRatio
         pvalue
         adjPvalue
-        approved
-        countSignificant
       }
     }
   }
@@ -82,29 +71,18 @@ def build_signature(
     de_csv: str, top_up: int, top_down: int, logger: logging.Logger
 ) -> tuple[list[str], list[str]]:
     df = pd.read_csv(de_csv)
-    required = {"gene_name", "log2FoldChange", "padj"}
+    required = {"gene_name", "log2FoldChange", "stat"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"DE CSV missing required columns: {sorted(missing)}")
 
-    df = df.dropna(subset=["gene_name", "log2FoldChange", "padj"])
+    df = df.dropna(subset=["gene_name", "log2FoldChange", "stat"])
     df = df[df["gene_name"].astype(str).str.len() > 0]
-    df = df.sort_values("padj", ascending=True, kind="mergesort")
 
-    up = (
-        df[df["log2FoldChange"] > 0]["gene_name"]
-        .astype(str)
-        .drop_duplicates()
-        .head(top_up)
-        .tolist()
-    )
-    down = (
-        df[df["log2FoldChange"] < 0]["gene_name"]
-        .astype(str)
-        .drop_duplicates()
-        .head(top_down)
-        .tolist()
-    )
+    up_df = df.loc[df["log2FoldChange"] > 0].nlargest(top_up, columns="stat")
+    down_df = df.loc[df["log2FoldChange"] < 0].nsmallest(top_down, columns="stat")
+    up = up_df["gene_name"].astype(str).drop_duplicates().tolist()
+    down = down_df["gene_name"].astype(str).drop_duplicates().tolist()
     logger.info("signature built: up=%d down=%d (from %s)", len(up), len(down), de_csv)
     return up, down
 
@@ -169,13 +147,11 @@ def parse_results(response: dict[str, Any], logger: logging.Logger) -> list[dict
 
     rows: list[dict[str, Any]] = []
     for i, entry in enumerate(consensus_sorted, start=1):
-        drug = entry.get("drug") or ""
         rows.append(
             {
                 "rank": i,
-                "perturbagen": drug,
+                "perturbagen": entry.get("drug") or "",
                 "moa": "",
-                "target": "",
                 "score": entry.get("oddsRatio"),
                 "pvalue": entry.get("pvalue"),
                 "fdr": entry.get("adjPvalue"),
@@ -183,6 +159,40 @@ def parse_results(response: dict[str, Any], logger: logging.Logger) -> list[dict
         )
     logger.info("parsed %d consensus perturbagens", len(rows))
     return rows
+
+
+def fetch_moas(
+    drugs: list[str], endpoint: str, logger: logging.Logger
+) -> dict[str, str]:
+    """Batch-lookup MoA for each drug via a single aliased fdaCount query.
+
+    L2S2's pairedEnrich returns drug names only; MoA lives on FdaCount and
+    the web UI joins them client-side. On any failure returns {} so callers
+    can fall through to empty moa columns rather than abort.
+    """
+    if not drugs:
+        return {}
+    parts = [
+        f"a{i}: fdaCount(perturbation: {json.dumps(d)}) {{ moa }}"
+        for i, d in enumerate(drugs)
+    ]
+    query = "query MoaLookup { " + " ".join(parts) + " }"
+    try:
+        resp = post_with_retry(endpoint, {"query": query}, logger)
+    except Exception as exc:
+        logger.warning("MoA lookup failed: %s; rows will have empty moa", exc)
+        return {}
+    if resp.get("errors"):
+        logger.warning("MoA lookup GraphQL errors: %s", resp["errors"])
+    data = resp.get("data") or {}
+    out: dict[str, str] = {}
+    for i, drug in enumerate(drugs):
+        node = data.get(f"a{i}") or {}
+        moa = node.get("moa")
+        if moa:
+            out[drug] = moa
+    logger.info("MoA lookup: %d/%d drugs annotated", len(out), len(drugs))
+    return out
 
 
 def write_tsv(out_path: Path, rows: list[dict[str, Any]]) -> None:
@@ -194,54 +204,50 @@ def write_tsv(out_path: Path, rows: list[dict[str, Any]]) -> None:
             writer.writerow(row)
 
 
-def main() -> None:
-    sm = snakemake  # type: ignore[name-defined]
-    log_path = sm.log[0] if sm.log else "logs/l2s2_query.log"
-    logger = _setup_logger(log_path)
+snake = snakemake  # noqa: F821  (injected by snakemake script: directive)
 
-    de_csv = sm.input["de"]
-    out_path = Path(sm.output["hits"])
-    params = sm.params
-    top_up = int(params["top_up"])
-    top_down = int(params["top_down"])
+log_path = snake.log[0] if snake.log else "logs/l2s2_query.log"
+logger = _setup_logger(log_path)
 
-    endpoint = os.environ.get("L2S2_API_URL", DEFAULT_ENDPOINT)
-    logger.info("L2S2 endpoint: %s", endpoint)
+de_csv = snake.input["de"]
+out_path = Path(snake.output["hits"])
+top_up = int(snake.params["top_up"])
+top_down = int(snake.params["top_down"])
 
-    try:
-        genes_up, genes_down = build_signature(de_csv, top_up, top_down, logger)
-    except Exception as exc:
-        logger.error("failed to build signature: %s", exc)
-        _write_empty(out_path)
-        return
+logger.info("L2S2 endpoint: %s", ENDPOINT)
 
-    if not genes_up and not genes_down:
-        logger.error("signature is empty (no genes with padj/log2FC); writing empty TSV")
-        _write_empty(out_path)
-        return
+try:
+    genes_up, genes_down = build_signature(de_csv, top_up, top_down, logger)
+except Exception as exc:
+    logger.error("failed to build signature: %s", exc)
+    _write_empty(out_path)
+    sys.exit(0)
 
-    payload = {
-        "query": PAIRED_ENRICH_QUERY,
-        "variables": {
-            "genesUp": genes_up,
-            "genesDown": genes_down,
-            "first": max(top_up, top_down),
-            "topN": 10000,
-            "pvalueLe": 0.05,
-        },
-    }
+if not genes_up or not genes_down:
+    logger.error(
+        "signature incomplete (up=%d down=%d); paired enrichment needs both — writing empty TSV",
+        len(genes_up), len(genes_down),
+    )
+    _write_empty(out_path)
+    sys.exit(0)
 
-    try:
-        response = post_with_retry(endpoint, payload, logger)
-        rows = parse_results(response, logger)
-    except Exception as exc:
-        logger.error("L2S2 query failed, writing empty TSV: %s", exc)
-        _write_empty(out_path)
-        return
+payload = {
+    "query": PAIRED_ENRICH_QUERY,
+    "variables": {"genesUp": genes_up, "genesDown": genes_down},
+}
 
-    write_tsv(out_path, rows)
-    logger.info("wrote %d rows to %s", len(rows), out_path)
+try:
+    response = post_with_retry(ENDPOINT, payload, logger)
+    rows = parse_results(response, logger)
+except Exception as exc:
+    logger.error("L2S2 query failed, writing empty TSV: %s", exc)
+    _write_empty(out_path)
+    sys.exit(0)
 
+drugs = sorted({r["perturbagen"] for r in rows if r["perturbagen"]})
+moa_map = fetch_moas(drugs, ENDPOINT, logger)
+for r in rows:
+    r["moa"] = moa_map.get(r["perturbagen"], "")
 
-if __name__ == "__main__" or "snakemake" in globals():
-    main()
+write_tsv(out_path, rows)
+logger.info("wrote %d rows to %s", len(rows), out_path)
