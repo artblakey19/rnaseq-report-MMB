@@ -328,11 +328,11 @@ if (!isTRUE(tfea_enabled)) {
 #### Contributing target genes
 
 ::: {.lang-en}
-The ULM score is a t-value on the correlation between a TF's CollecTRI weight vector and the gene-level Wald statistic, so it splits exactly over genes as `(weight - mean weight) x (stat - mean stat)`. Rank 1 is the target most responsible for the reported activity; a repressed target (`weight = -1`) that moves down contributes positively. Top 10 targets of each TF plotted above.
+The ULM score is a t-value on the correlation between a TF's CollecTRI weight vector and the gene-level Wald statistic, so it splits exactly over the regulon as `contribution = weight x (stat - mean stat)`. Rank 1 is the target most responsible for the reported activity; a repressed target (`weight = -1`) that moves down contributes positively. Top 10 targets of each TF plotted above.
 :::
 
 ::: {.lang-ko}
-ULM score는 해당 TF의 CollecTRI weight 벡터와 유전자 수준 Wald statistic 간 상관의 t-value이므로 `(weight - mean weight) x (stat - mean stat)`로 유전자별 정확히 분해됩니다. rank 1은 보고된 활성도에 가장 크게 기여한 target이며, 억제 target(`weight = -1`)이 하향 조절되면 양의 기여를 합니다. 위 plot에 표시된 각 TF의 상위 10개 target.
+ULM score는 해당 TF의 CollecTRI weight 벡터와 유전자 수준 Wald statistic 간 상관의 t-value이므로 `contribution = weight x (stat - mean stat)`로 regulon 위에서 정확히 분해됩니다. rank 1은 보고된 활성도에 가장 크게 기여한 target이며, 억제 target(`weight = -1`)이 하향 조절되면 양의 기여를 합니다. 위 plot에 표시된 각 TF의 상위 10개 target.
 :::
 
 ```{r enr-tf-targets, results='asis'}

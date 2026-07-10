@@ -39,17 +39,21 @@ class UlmContributionTableTests(unittest.TestCase):
     def test_contributions_reconstruct_pearson_r(self):
         table = ulm_contribution_table(MAT, NET, SCORES)
         y = np.array(STAT)
-        y_centred = y - y.mean()
         n = len(GENES)
 
         for source in ("T1", "T2"):
             x = weight_vector(source)
-            emitted = table[table["source"] == source]["contribution"].sum()
-            # Non-targets are omitted from the table but carry -mean(x) * centred stat.
-            non_target = float((-x.mean() * y_centred[x == 0.0]).sum())
-            cov_numerator = emitted + non_target
+            # The emitted rows alone are the whole covariance numerator: non-targets
+            # carry weight 0, so no residual is left behind.
+            cov_numerator = table[table["source"] == source]["contribution"].sum()
             r = cov_numerator / ((n - 1) * x.std(ddof=1) * y.std(ddof=1))
             self.assertAlmostEqual(r, pearson(source), places=10)
+
+    def test_contribution_is_weight_times_centred_stat(self):
+        table = ulm_contribution_table(MAT, NET, SCORES)
+        centred = pd.Series(STAT, index=GENES) - np.mean(STAT)
+        expected = table["weight"].to_numpy() * centred.loc[table["target"]].to_numpy()
+        np.testing.assert_allclose(table["contribution"].to_numpy(), expected)
 
     def test_rank_is_oriented_by_score_sign(self):
         table = ulm_contribution_table(MAT, NET, SCORES)
