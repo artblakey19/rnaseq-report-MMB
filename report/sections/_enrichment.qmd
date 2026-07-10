@@ -325,6 +325,40 @@ if (!isTRUE(tfea_enabled)) {
 }
 ```
 
+#### Contributing target genes
+
+::: {.lang-en}
+The ULM score is a t-value on the correlation between a TF's CollecTRI weight vector and the gene-level Wald statistic, so it splits exactly over genes as `(weight - mean weight) x (stat - mean stat)`. Rank 1 is the target most responsible for the reported activity; a repressed target (`weight = -1`) that moves down contributes positively. Top 10 targets of each TF plotted above.
+:::
+
+::: {.lang-ko}
+ULM score는 해당 TF의 CollecTRI weight 벡터와 유전자 수준 Wald statistic 간 상관의 t-value이므로 `(weight - mean weight) x (stat - mean stat)`로 유전자별 정확히 분해됩니다. rank 1은 보고된 활성도에 가장 크게 기여한 target이며, 억제 target(`weight = -1`)이 하향 조절되면 양의 기여를 합니다. 위 plot에 표시된 각 TF의 상위 10개 target.
+:::
+
+```{r enr-tf-targets, results='asis'}
+tgt_path <- file.path(project_root, "results", "tfea", cid, "tf_targets.tsv")
+tgt <- safe_read(tgt_path, sep = "\t")
+
+if (isTRUE(tfea_enabled)) {
+  if (is.null(tgt) || nrow(tgt) == 0 || !exists("tf_top") || nrow(tf_top) == 0) {
+    cat(as.character(no_results("No TF contributions to show.")))
+  } else {
+    keep <- rev(levels(tf_top$source))
+    show_tgt <- tgt |>
+      dplyr::filter(source %in% keep, rank <= 10) |>
+      dplyr::arrange(match(source, keep), rank)
+    dt <- report_table(
+      show_tgt, rownames = FALSE, filter = "top",
+      options  = list(pageLength = 10, lengthMenu = c(10, 25, 50, 100), scrollX = TRUE, dom = "lfrtip"),
+      signif_cols = intersect(c("stat", "contribution"), names(show_tgt)),
+      digits  = 3
+    )
+    cat(knitr::knit_print(dt))
+    cat("\n\n")
+  }
+}
+```
+
 ### Pathway activity (PROGENy)
 
 ::: {.lang-en}

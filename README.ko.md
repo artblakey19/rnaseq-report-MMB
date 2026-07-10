@@ -145,7 +145,7 @@ docker image prune                                   # 캐시 정리(선택)
 | **차등발현**                   | DESeq2 Wald test + apeglm LFC shrinkage.                   | DEG 요약, volcano, MA, top-30 DEG heatmap, 전체 결과.                 |
 | **Gene-set enrichment (GSEA)** | pre-ranked GSEA (ranking matric: Wald stat).               | MSigDB H / C2:CP (Reactome, WikiPathways, PID, BioCarta) / C2:CGP / C6 |
 | **Over-representation (ORA)**  | `clusterProfiler::enricher()` + KEGG live REST.          | DB(GOBP, KEGG, Reactome, Hallmark)별 top-10 up/down                    |
-| **TFEA**                  | decoupler + ULM + CollecTRI                               | Top-30 TF + 전체 score                                                 |
+| **TFEA**                  | decoupler + ULM + CollecTRI                               | Top-30 TF + 전체 score + score별 target 기여도                         |
 | **Pathway 활성도**             | decoupler MLM + PROGENy                                    | Contrast 단위 pathway activity bar chart (input: DESeq2 Wald stat).   |
 | **cMap**         | Up/down DEG signature로 L2S2 paired query.                 | Ranked perturbagen                                                     |
 | **Audit trail**                | Config snapshot, MD5, session info, nf-core `pipeline_info/`. | 재현성 정보                                                            |

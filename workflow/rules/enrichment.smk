@@ -43,6 +43,7 @@ rule tfea:
         de = RESULTS / "de" / "{contrast}" / "deseq2_results.csv",
     output:
         scores = RESULTS / "tfea" / "{contrast}" / "tf_scores.tsv",
+        targets = RESULTS / "tfea" / "{contrast}" / "tf_targets.tsv",
     log:
         "logs/tfea/{contrast}.log",
     conda:

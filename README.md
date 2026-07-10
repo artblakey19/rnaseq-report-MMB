@@ -145,7 +145,7 @@ docker image prune                                   # optional cleanup
 | **Differential expression**    | DESeq2 Wald test + apeglm LFC shrinkage.                        | DEG summary, volcano, MA, top-30 DEG heatmap, full results table.      |
 | **Gene-set enrichment (GSEA)** | Pre-ranked GSEA (ranking metric: Wald stat).                    | MSigDB H / C2:CP (Reactome, WikiPathways, PID, BioCarta) / C2:CGP / C6 |
 | **Over-representation (ORA)**  | `clusterProfiler::enricher()` + KEGG live REST.                 | Per-DB (GO BP, KEGG, Reactome, Hallmark) top-10 up / down              |
-| **TFEA**                | decoupler + ULM + CollecTRI                                     | Top-30 TFs + full score table                                          |
+| **TFEA**                | decoupler + ULM + CollecTRI                                     | Top-30 TFs + full score table + per-target contributions to each score |
 | **Pathway activity**           | decoupler MLM + PROGENy                                         | Per-contrast pathway activity bar chart (input: DESeq2 Wald stat).     |
 | **cMap**         | L2S2 paired query on up / down DEG signatures.                  | Ranked perturbagens                                                    |
 | **Audit trail**                | Config snapshot, MD5, session info, nf-core `pipeline_info/`. | Reproducibility block                                                  |

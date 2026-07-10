@@ -1,8 +1,9 @@
 """TF activity inference via decoupler-py (ULM on CollecTRI network).
 
 Per-contrast: builds a 1-condition x genes matrix from the DE `stat` column
-and runs decoupler.mt.ulm against the CollecTRI network. Output is a long
-table of TF activity scores + p-values, one row per TF.
+and runs decoupler.mt.ulm against the CollecTRI network. Outputs a long table
+of TF activity scores + p-values (one row per TF) and a long table of the
+per-target contributions that produced each score.
 
 Mirrors the saezlab vignette (tf_bk.html) and the PROGENy implementation —
 single decoupler call on per-contrast statistics rather than per-sample VST.
@@ -17,6 +18,7 @@ from _decoupler_common import (
     bh_adjust,
     load_de_stat_matrix,
     setup_logger,
+    ulm_contribution_table,
     unpack_decoupler_result,
 )
 
@@ -26,6 +28,7 @@ logger = setup_logger(Path(snake.log[0]), "tfea")
 
 de_path = Path(snake.input["de"])
 out_path = Path(snake.output["scores"])
+targets_path = Path(snake.output["targets"])
 out_path.parent.mkdir(parents=True, exist_ok=True)
 
 # decoupler-py official tutorial recommends DESeq2 Wald stat (t-value) input
@@ -67,3 +70,8 @@ scores[["source", "score", "p_value", "padj"]].to_csv(
     out_path, sep="\t", index=False, na_rep="NA", float_format="%.6g"
 )
 logger.info("wrote %s: %d TFs", out_path, len(scores))
+
+targets = ulm_contribution_table(mat, net, scores.set_index("source")["score"])
+targets.to_csv(targets_path, sep="\t", index=False, na_rep="NA", float_format="%.6g")
+logger.info("wrote %s: %d contributions across %d TFs",
+            targets_path, len(targets), targets["source"].nunique())

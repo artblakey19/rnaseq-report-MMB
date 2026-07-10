@@ -36,7 +36,8 @@ ORA_OUTPUTS = (
     if ENRICHMENT_ENABLED else []
 )
 TFEA_OUTPUTS = (
-    expand(RESULTS / "tfea" / "{contrast}" / "tf_scores.tsv", contrast=CONTRAST_IDS)
+    expand(RESULTS / "tfea" / "{contrast}" / "{f}", contrast=CONTRAST_IDS,
+           f=["tf_scores.tsv", "tf_targets.tsv"])
     if TFEA_ENABLED else []
 )
 PROGENY_OUTPUTS = (

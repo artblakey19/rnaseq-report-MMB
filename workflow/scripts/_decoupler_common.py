@@ -91,6 +91,52 @@ def load_de_stat_matrix(
     return mat
 
 
+def ulm_contribution_table(
+    mat: pd.DataFrame, net: pd.DataFrame, score_by_source: pd.Series
+) -> pd.DataFrame:
+    """Split each source's ULM score into per-target contributions.
+
+    ULM scores a source as the t-value of the Pearson correlation between its
+    weight vector (0 for non-targets) and the gene statistic. Centred statistics
+    sum to zero, so the mean-weight term of the covariance numerator drops out
+    and it collapses to `sum over targets of weight * (stat - mean stat)`: every
+    emitted row is a self-contained share of the score and genes outside the
+    regulon contribute exactly zero. Targets are ranked by that share oriented to
+    the sign of the source score, so rank 1 is the gene most responsible for the
+    reported activity and a repressed target (weight < 0) that moves down
+    contributes positively.
+
+    ULM only. MLM (PROGENy) fits every source jointly, so its scores are partial
+    coefficients and this decomposition does not hold.
+    """
+    stat = mat.iloc[0]
+    stat_centred = stat - stat.mean()
+    groups = dict(list(net[net["target"].isin(stat.index)].groupby("source", sort=False)))
+
+    frames = []
+    for source in score_by_source.index:
+        sub = groups.get(source)
+        if sub is None:
+            continue
+        weight = sub["weight"].to_numpy(dtype=float)
+        contribution = weight * stat_centred.loc[sub["target"]].to_numpy()
+        orient = 1.0 if score_by_source[source] >= 0 else -1.0
+        order = np.argsort(-orient * contribution, kind="stable")
+        frames.append(
+            pd.DataFrame(
+                {
+                    "source": source,
+                    "rank": np.arange(1, order.size + 1),
+                    "target": sub["target"].to_numpy()[order],
+                    "weight": weight[order],
+                    "stat": stat.loc[sub["target"]].to_numpy()[order],
+                    "contribution": contribution[order],
+                }
+            )
+        )
+    return pd.concat(frames, ignore_index=True)
+
+
 def unpack_decoupler_result(result):
     """decoupler.mt.* may return (estimate, pvalue) tuple or a single DataFrame."""
     if isinstance(result, tuple):
